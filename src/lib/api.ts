@@ -47,3 +47,4 @@ export const api = {
     return request<{ items: InboxItem[] }>(`/api/inbox${qs}`);
   },
 };
+
