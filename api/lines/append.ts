@@ -1,6 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
-import { parseLine, splitIntoLines } from "./parser";
-import type { Bucket } from "./parser";
+import { parseLine, splitIntoLines } from "../../lib/parser";
+import type { Bucket } from "../../lib/parser";
 
 function getEnv(name: string): string {
   const v = process.env[name];

@@ -9,7 +9,8 @@
       "Bash(npm run dev:*)",
       "Bash(npm install:*)",
       "Bash(npm ls:*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(move \"D:\\\\1.SQM\\\\3.PERSONAL\\\\1. DEVELOPMENT\\\\brain-dump\\\\api\\\\lines\\\\parser.ts\" \"D:\\\\1.SQM\\\\3.PERSONAL\\\\1. DEVELOPMENT\\\\brain-dump\\\\lib\\\\parser.ts\")"
     ]
   }
 }
