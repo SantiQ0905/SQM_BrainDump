@@ -1,0 +1,400 @@
+# Brain Dump App MVP Spec (Telegram + React/Vite)
+
+## 1) Goal
+
+A private, ultra-fast “capture → inbox → process” system:
+
+* **Capture anywhere** by messaging a **Telegram bot**
+* Everything lands in an **Inbox**
+* You process items in a **web app** into:
+
+  * Task
+  * Note
+  * Bookmark
+  * Journal
+* Search + tags + archive
+* No accounts/login UI (solo use)
+
+---
+
+## 2) Stack
+
+### Frontend
+
+* React + Vite + TypeScript
+* Tailwind CSS
+* (Optional later) TanStack Query for caching
+
+### Backend (minimal, web-only)
+
+* Vercel Serverless Functions (Node/TS)
+* Endpoints under `/api/*`
+
+### Database
+
+* Supabase Postgres
+* Using **service role key on the server only** (never in browser)
+
+### Secrets (no auth, but still private)
+
+* `ADMIN_KEY`: single secret to protect your web API (reads/writes)
+* `TELEGRAM_SECRET`: secret header for Telegram webhook validation
+
+This keeps it “just you” without making the DB public.
+
+---
+
+## 3) How it operates end-to-end
+
+### A) Capture (Telegram → DB)
+
+1. You send a message to your Telegram bot (text, link, etc.)
+2. Telegram calls your webhook: `POST /api/telegram/webhook`
+3. Webhook validates secret header
+4. Webhook extracts message fields and inserts into `inbox_items`
+5. Item appears instantly in the web app’s Inbox
+
+### B) Process (Web → DB)
+
+1. You open the web app
+2. Inbox list loads: `GET /api/inbox` (requires `x-admin-key`)
+3. You click an item and choose:
+
+   * Convert to Task / Note / Bookmark / Journal
+   * Add tags
+   * Set due date/priority (for tasks)
+4. App calls `POST /api/inbox/convert` (requires `x-admin-key`)
+5. Backend:
+
+   * Creates the new entity row (task/note/bookmark/journal)
+   * Marks inbox item as processed + links to created row
+
+### C) Review/Search
+
+* Search across inbox + all entities
+* Filter by tags and status
+* Archive anything
+
+---
+
+## 4) MVP functionality
+
+### Must-have (V1)
+
+**Capture**
+
+* Telegram bot accepts:
+
+  * plain text
+  * links (as text)
+  * (optional) voice later, not in MVP
+* Store raw payload for debugging
+
+**Inbox**
+
+* List newest-first
+* Status: `inbox | processed | archived`
+* Actions:
+
+  * Open item detail
+  * Add/remove tags
+  * Archive
+  * Convert to: Task / Note / Bookmark / Journal
+
+**Tasks**
+
+* Fields: title, body, due_at (optional), priority, status
+* Basic views:
+
+  * “Todo”
+  * “Done”
+* Mark done/undone
+
+**Notes**
+
+* Title + body, tags
+* Basic list + view
+
+**Bookmarks**
+
+* URL + optional title + note, tags
+* Open URL
+
+**Journal**
+
+* Body + created_at, tags
+* (Optional) mood later
+
+**Search**
+
+* Single search bar that searches:
+
+  * inbox text
+  * tasks title/body
+  * notes title/body
+  * bookmarks url/title/note
+  * journal body
+
+**Tags**
+
+* Free-form tags (string list)
+* Filter by tag
+
+### Nice-to-have (V1.1, not required)
+
+* “Daily Review” screen
+* Bot command `/inbox` returns count
+* Bot command `/last` returns last captured item
+
+---
+
+## 5) Non-goals (explicitly out of scope for MVP)
+
+* Multi-user accounts
+* Sharing/collaboration
+* Complex projects/areas hierarchy
+* Notifications/reminders (we can add later with scheduled jobs)
+* AI summarization (later)
+
+---
+
+## 6) Data model (tables)
+
+We keep it intentionally small.
+
+### `inbox_items`
+
+* `id` uuid PK
+* `created_at` timestamptz default now
+* `source` text (always `telegram` for now)
+* `telegram_chat_id` text
+* `telegram_user_id` text
+* `text` text (normalized message text)
+* `raw_payload` jsonb (full Telegram update)
+* `status` text enum-like: `inbox | processed | archived`
+* `tags` text[] default `{}`
+* `processed_type` text nullable (`task|note|bookmark|journal`)
+* `processed_id` uuid nullable (points to created entity)
+
+### `tasks`
+
+* `id` uuid PK
+* `created_at`
+* `title` text
+* `body` text
+* `due_at` timestamptz nullable
+* `priority` text (`low|med|high`) default `med`
+* `status` text (`todo|done`) default `todo`
+* `tags` text[] default `{}`
+
+### `notes`
+
+* `id` uuid PK
+* `created_at`
+* `title` text
+* `body` text
+* `tags` text[] default `{}`
+
+### `bookmarks`
+
+* `id` uuid PK
+* `created_at`
+* `url` text
+* `title` text nullable
+* `note` text nullable
+* `tags` text[] default `{}`
+
+### `journal_entries`
+
+* `id` uuid PK
+* `created_at`
+* `body` text
+* `tags` text[] default `{}`
+
+That’s enough for a real, usable system.
+
+---
+
+## 7) Backend API (Vercel functions)
+
+All app endpoints require header:
+
+* `x-admin-key: <ADMIN_KEY>`
+
+Telegram endpoint requires header:
+
+* `x-telegram-bot-api-secret-token: <TELEGRAM_SECRET>`
+
+### Telegram
+
+**POST `/api/telegram/webhook`**
+
+* Validates secret header
+* Extracts:
+
+  * chat id
+  * user id
+  * text (from `message.text` OR `caption` for media; MVP: text only)
+* Inserts into `inbox_items`
+* Returns 200 quickly
+
+### Inbox
+
+**GET `/api/inbox?status=inbox|processed|archived&search=&tag=`**
+
+* Returns list (paginated later; MVP can be last 200)
+
+**GET `/api/inbox/:id`**
+
+* Returns one item
+
+**POST `/api/inbox/:id/tags`**
+
+* Body: `{ add?: string[], remove?: string[] }`
+
+**POST `/api/inbox/:id/archive`**
+
+* Sets status = archived
+
+**POST `/api/inbox/:id/unarchive`**
+
+* Sets status = inbox (optional)
+
+**POST `/api/inbox/:id/convert`**
+
+* Body: `{ type: "task"|"note"|"bookmark"|"journal", payload: {...}, tags?: string[] }`
+* Creates entity row
+* Updates inbox item: `status=processed`, `processed_type`, `processed_id`
+
+### Entities
+
+**GET `/api/tasks?status=todo|done&search=&tag=`**
+**POST `/api/tasks/:id/status`** `{ status: "todo"|"done" }`
+
+Similar simple `GET` endpoints for notes/bookmarks/journal.
+
+---
+
+## 8) Frontend screens (MVP UI)
+
+### Layout
+
+* Left sidebar (navigation)
+
+  * Inbox
+  * Tasks
+  * Notes
+  * Bookmarks
+  * Journal
+* Main content area
+
+### Inbox screen
+
+* Top: Search bar + Tag filter + Status filter
+* List of items
+* Clicking item opens a detail drawer/panel:
+
+  * Full text
+  * Tags editor
+  * Buttons:
+
+    * Convert → Task/Note/Bookmark/Journal
+    * Archive
+
+Conversion opens a small modal/form:
+
+* If Task: title, body, due, priority
+* If Note: title, body
+* If Bookmark: url + optional title/note
+* If Journal: body (pre-filled from inbox)
+
+### Tasks screen
+
+* Simple list with:
+
+  * status toggle
+  * due date
+  * priority
+  * tags
+* Search + tag filter
+
+### Notes / Bookmarks / Journal
+
+* Simple list + detail view
+* Search + tag filter
+
+### “Enter admin key once” (no login)
+
+* First load: if no key in localStorage
+
+  * Show single input: “Admin Key”
+  * Store in localStorage
+* Every API call attaches header automatically
+
+This is the “no auth” experience, but still protected.
+
+---
+
+## 9) Security model (minimal but sane)
+
+* DB is never exposed to the client directly
+* Only serverless functions have DB service role key
+* The web app must present `ADMIN_KEY` to call server endpoints
+* Telegram webhook must present `TELEGRAM_SECRET`
+
+If someone finds your site URL, they still can’t access anything.
+
+---
+
+## 10) Deployment flow
+
+### Supabase
+
+* Create project
+* Run SQL migrations to create tables
+* (Optional) enable backups later
+
+### Vercel
+
+* Import Git repo
+* Add env vars:
+
+  * `ADMIN_KEY`
+  * `TELEGRAM_SECRET`
+  * `SUPABASE_URL`
+  * `SUPABASE_SERVICE_ROLE_KEY`
+* Deploy
+
+### Telegram
+
+* Create bot with BotFather → `BOT_TOKEN`
+* Set webhook to:
+
+  * `https://your-domain.com/api/telegram/webhook`
+* Telegram secret token set to `TELEGRAM_SECRET`
+
+---
+
+## 11) Acceptance criteria (what “MVP done” means)
+
+1. You can send “hello world” to the bot and see it appear in Inbox within seconds.
+2. You can tag it and archive it.
+3. You can convert it to a task and it appears in Tasks.
+4. Search finds items across Inbox and Tasks.
+5. No login/account flows exist—just the admin key once.
+6. App + API are deployed and stable.
+
+---
+
+## 12) Step-by-step build order (we’ll follow this)
+
+1. Create Vite app + basic UI skeleton
+2. Create Supabase tables (SQL)
+3. Add serverless API: `/api/inbox` returning empty list (wired to DB)
+4. Add Telegram webhook endpoint and confirm ingestion
+5. Build Inbox UI (list + detail + tags + archive)
+6. Add conversion flow (Task first)
+7. Add Tasks UI
+8. Add Notes/Bookmarks/Journal (easy repeats)
+9. Add search + tag filters
+

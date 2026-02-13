@@ -29,22 +29,37 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return (await res.json()) as T;
 }
 
-export type InboxItem = {
+
+export type LineItem = {
   id: string;
   created_at: string;
-  text: string;
-  status: "inbox" | "processed" | "archived";
-  tags: string[];
+  bucket: "inbox" | "tasks" | "notes" | "links" | "journal" | "archive";
+  raw: string;
+  source: "web" | "telegram";
+  parsed: {
+    tags?: string[];
+    project?: string | null;
+    due?: string | null;
+    priority?: number | null;
+    done?: boolean | null;
+    urls?: string[];
+  };
 };
 
 export const api = {
-  inbox: (params?: { status?: string; search?: string; tag?: string }) => {
+  lines: (params?: { bucket?: string; search?: string; tag?: string }) => {
     const q = new URLSearchParams();
-    if (params?.status) q.set("status", params.status);
+    if (params?.bucket) q.set("bucket", params.bucket);
     if (params?.search) q.set("search", params.search);
     if (params?.tag) q.set("tag", params.tag);
     const qs = q.toString() ? `?${q.toString()}` : "";
-    return request<{ items: InboxItem[] }>(`/api/inbox${qs}`);
+    return request<{ items: LineItem[] }>(`/api/lines${qs}`);
+  },
+
+  appendLines: (text: string, defaultBucket: string = "inbox") => {
+    return request<{ inserted: number }>(`/api/lines/append`, {
+      method: "POST",
+      body: JSON.stringify({ text, defaultBucket }),
+    });
   },
 };
-
