@@ -24,7 +24,12 @@ function devApi(): Plugin {
         // e.g. /api/inbox  →  ./api/inbox.ts
         const route = url.pathname.slice(1); // "api/inbox"
         try {
-          const mod = await server.ssrLoadModule(`./${route}.ts`);
+          let mod: any;
+          try {
+            mod = await server.ssrLoadModule(`./${route}.ts`);
+          } catch {
+            mod = await server.ssrLoadModule(`./${route}/index.ts`);
+          }
           await mod.default(Object.assign(req, { query }), res);
         } catch (e: any) {
           if (!res.headersSent) {
