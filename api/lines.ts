@@ -41,7 +41,11 @@ export default async function handler(req: any, res: any) {
 
     if (bucket) q = q.eq("bucket", bucket);
     if (search.trim()) q = q.ilike("raw", `%${search.trim()}%`);
-    if (tag.trim()) q = q.contains("parsed->tags", [tag.trim().toLowerCase()]);
+    if (tag.trim()) {
+      const t = tag.trim().toLowerCase();
+      q = q.contains("parsed", { tags: [t] });
+    }
+
 
     const { data, error } = await q;
 
