@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { api, LineItem } from "../../lib/api";
+import { api } from "../../lib/api";
+import type { LineItem } from "../../lib/api";
 
 export function InboxPage() {
   const bucket = "inbox";
