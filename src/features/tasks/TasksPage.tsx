@@ -45,109 +45,131 @@ export function TasksPage() {
   }
 
   return (
-    <div className="mx-auto max-w-2xl">
-      <div className="mb-6">
-        <h1 className="text-lg font-semibold tracking-tight">Tasks</h1>
-        <p className="text-[13px] text-neutral-400">
-          Things to do. Use [ ] for checkboxes, !1 !2 !3 for priority.
-        </p>
+    <div>
+      <div className="mb-8 flex items-baseline justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-neutral-900">
+            Tasks
+          </h1>
+          <p className="mt-1 text-sm text-neutral-400">
+            Things to do. [ ] for checkboxes, !1 !2 !3 for priority.
+          </p>
+        </div>
+        {!loading && items.length > 0 && (
+          <span className="rounded-full bg-neutral-200/60 px-3 py-1 text-xs font-medium text-neutral-500">
+            {items.length} {items.length === 1 ? "task" : "tasks"}
+          </span>
+        )}
       </div>
 
-      <div className="mb-5 rounded-xl border border-neutral-200 bg-white p-4">
-        <textarea
-          className="w-full resize-none rounded-lg border-0 bg-transparent p-0 font-mono text-sm leading-relaxed text-neutral-800 placeholder:text-neutral-300 outline-none"
-          rows={4}
-          placeholder={`[ ] Buy groceries ^15-02 #errands
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
+        <div className="xl:sticky xl:top-0 xl:self-start">
+          <div className="rounded-2xl border border-neutral-200/80 bg-white p-5 shadow-sm">
+            <textarea
+              className="w-full resize-none bg-transparent font-mono text-[13px] leading-relaxed text-neutral-800 placeholder:text-neutral-300 outline-none"
+              rows={6}
+              placeholder={`[ ] Buy groceries ^15-02 #errands
 [ ] Review PR for auth module @work !1
 [ ] Call dentist ^20-03 !2`}
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) addText();
-          }}
-        />
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) addText();
+              }}
+            />
 
-        <div className="mt-3 flex items-center justify-between border-t border-neutral-100 pt-3">
-          <div className="text-[11px] text-neutral-300">
-            Ctrl+Enter to add &middot; multi-line OK
+            <div className="mt-4 flex items-center justify-between border-t border-neutral-100 pt-4">
+              <span className="text-[11px] text-neutral-300">
+                Ctrl+Enter &middot; multi-line OK
+              </span>
+              <button
+                className="rounded-lg bg-neutral-900 px-4 py-2 text-xs font-semibold text-white shadow-sm transition-all hover:bg-neutral-800 active:scale-[0.97] disabled:opacity-40 disabled:shadow-none"
+                disabled={adding || !draft.trim()}
+                onClick={addText}
+              >
+                {adding ? "Adding..." : "Add"}
+              </button>
+            </div>
+
+            {error && (
+              <div className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">
+                {error}
+              </div>
+            )}
           </div>
-          <button
-            className="rounded-lg bg-neutral-900 px-3.5 py-1.5 text-xs font-medium text-white transition-colors hover:bg-neutral-700 disabled:opacity-40"
-            disabled={adding || !draft.trim()}
-            onClick={addText}
-          >
-            {adding ? "Adding..." : "Add"}
-          </button>
         </div>
 
-        {error && (
-          <div className="mt-2 text-xs text-red-500">{error}</div>
-        )}
-      </div>
+        <div className="rounded-2xl border border-neutral-200/80 bg-white shadow-sm">
+          {loading && (
+            <div className="flex items-center justify-center py-16">
+              <div className="text-sm text-neutral-300">Loading...</div>
+            </div>
+          )}
 
-      <div className="rounded-xl border border-neutral-200 bg-white">
-        {loading && (
-          <div className="p-4 text-sm text-neutral-400">Loading...</div>
-        )}
+          {!loading && items.length === 0 && (
+            <div className="flex flex-col items-center justify-center py-20 text-neutral-300">
+              <div className="mb-2 text-3xl">~</div>
+              <div className="text-sm">No tasks yet</div>
+            </div>
+          )}
 
-        {!loading && items.length === 0 && (
-          <div className="p-8 text-center text-sm text-neutral-300">
-            No tasks yet
-          </div>
-        )}
-
-        {!loading && items.length > 0 && (
-          <ul>
-            {items.map((it, i) => (
-              <li
-                key={it.id}
-                className={`px-4 py-3 ${i > 0 ? "border-t border-neutral-50" : ""}`}
-              >
-                <div className="font-mono text-[13px] leading-relaxed text-neutral-800">
-                  {it.raw}
-                </div>
-                <LineMetadata item={it} />
-              </li>
-            ))}
-          </ul>
-        )}
+          {!loading && items.length > 0 && (
+            <ul>
+              {items.map((it, i) => (
+                <li
+                  key={it.id}
+                  className={`group px-5 py-4 transition-colors hover:bg-stone-50 ${i > 0 ? "border-t border-neutral-100" : ""}`}
+                >
+                  <div className="font-mono text-[13px] leading-relaxed text-neutral-800">
+                    {it.raw}
+                  </div>
+                  <LineMetadata item={it} />
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       </div>
     </div>
   );
 }
 
 function LineMetadata({ item }: { item: LineItem }) {
-  const parts: { label: string; color: string }[] = [];
+  const parts: { label: string; cls: string }[] = [];
 
   if (item.parsed?.priority) {
-    const colors = { 1: "text-red-400", 2: "text-amber-400", 3: "text-blue-400" };
-    parts.push({
-      label: `!${item.parsed.priority}`,
-      color: colors[item.parsed.priority as 1 | 2 | 3] ?? "text-neutral-400",
-    });
+    const cls = item.parsed.priority === 1
+      ? "bg-red-50 text-red-500"
+      : item.parsed.priority === 2
+        ? "bg-amber-50 text-amber-600"
+        : "bg-blue-50 text-blue-500";
+    parts.push({ label: `!${item.parsed.priority}`, cls });
   }
 
   if (item.parsed?.due) {
-    parts.push({ label: `^${item.parsed.due}`, color: "text-violet-400" });
+    parts.push({ label: `^${item.parsed.due}`, cls: "bg-violet-50 text-violet-500" });
   }
 
   if (item.parsed?.project) {
-    parts.push({ label: `@${item.parsed.project}`, color: "text-cyan-500" });
+    parts.push({ label: `@${item.parsed.project}`, cls: "bg-cyan-50 text-cyan-600" });
   }
 
   if (Array.isArray(item.parsed?.tags)) {
     for (const t of item.parsed.tags) {
-      parts.push({ label: `#${t}`, color: "text-neutral-400" });
+      parts.push({ label: `#${t}`, cls: "bg-neutral-100 text-neutral-500" });
     }
   }
 
   return (
-    <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px]">
-      <span className="text-neutral-300">
+    <div className="mt-2 flex flex-wrap items-center gap-1.5">
+      <span className="text-[11px] text-neutral-300">
         {new Date(item.created_at).toLocaleDateString()}
       </span>
       {parts.map((p) => (
-        <span key={p.label} className={p.color}>
+        <span
+          key={p.label}
+          className={`rounded-md px-1.5 py-0.5 font-mono text-[10px] font-medium ${p.cls}`}
+        >
           {p.label}
         </span>
       ))}

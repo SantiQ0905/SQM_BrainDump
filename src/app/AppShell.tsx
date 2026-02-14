@@ -3,13 +3,13 @@ import { Sidebar } from "./layout/Sidebar";
 
 export function AppShell() {
   return (
-    <div className="min-h-screen bg-neutral-50 text-neutral-900">
-      <div className="mx-auto flex min-h-screen max-w-5xl">
-        <Sidebar />
-        <main className="flex-1 px-8 py-8">
+    <div className="flex h-screen overflow-hidden bg-stone-100 text-neutral-900">
+      <Sidebar />
+      <main className="custom-scrollbar flex-1 overflow-y-auto">
+        <div className="p-10">
           <Outlet />
-        </main>
-      </div>
+        </div>
+      </main>
     </div>
   );
 }
