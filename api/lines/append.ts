@@ -35,7 +35,7 @@ function parseLine(input: string, defaultBucket: Bucket = "inbox") {
 
   const tags = extractAll(/#([a-zA-Z0-9_-]+)/g, raw).map((t) => t.toLowerCase());
   const projects = extractAll(/@([a-zA-Z0-9_-]+)/g, raw).map((p) => p.toLowerCase());
-  const due = (raw.match(/\^(\d{4}-\d{2}-\d{2})/)?.[1] ?? null);
+  const due = parseDue(raw);
   const priority = (raw.match(/!(1|2|3)\b/)?.[1] ?? null);
   const doneToken = raw.match(/\[(x| )\]/i)?.[1] ?? null;
   const done = doneToken ? doneToken.toLowerCase() === "x" : null;
@@ -52,6 +52,26 @@ function parseLine(input: string, defaultBucket: Bucket = "inbox") {
   };
 
   return { bucket, raw, parsed };
+}
+
+/** Accept ^YYYY-MM-DD, ^DD-MM-YYYY, or ^DD-MM (assumes current year). */
+function parseDue(raw: string): string | null {
+  // ISO: ^2026-02-15
+  const iso = raw.match(/\^(\d{4})-(\d{2})-(\d{2})\b/);
+  if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
+
+  // DD-MM-YYYY: ^15-02-2026
+  const dmy = raw.match(/\^(\d{1,2})-(\d{1,2})-(\d{4})\b/);
+  if (dmy) return `${dmy[3]}-${dmy[2].padStart(2, "0")}-${dmy[1].padStart(2, "0")}`;
+
+  // DD-MM: ^15-02 (assumes current year)
+  const dm = raw.match(/\^(\d{1,2})-(\d{1,2})(?!\d)/);
+  if (dm) {
+    const year = new Date().getFullYear();
+    return `${year}-${dm[2].padStart(2, "0")}-${dm[1].padStart(2, "0")}`;
+  }
+
+  return null;
 }
 
 function splitIntoLines(text: string): string[] {
