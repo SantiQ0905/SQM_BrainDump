@@ -181,14 +181,21 @@ async function tgSendMessage(chatId: string | number, text: string, opts?: any) 
   }
 }
 
+function setCheckbox(raw: string, done: boolean) {
+  if (/\[(x| )\]/i.test(raw)) {
+    return raw.replace(/\[(x| )\]/i, done ? "[x]" : "[ ]");
+  }
+  return (done ? "[x] " : "[ ] ") + raw;
+}
+
 function smartKeyboard() {
-  // “Autocomplete” via tap buttons (Telegram’s best UX for this)
+  // "Autocomplete" via tap buttons (Telegram's best UX for this)
   return {
     keyboard: [
       [{ text: "t:" }, { text: "n:" }, { text: "l:" }, { text: "j:" }, { text: "i:" }],
       [{ text: "[ ]" }, { text: "[x]" }, { text: "!1" }, { text: "!2" }, { text: "!3" }],
       [{ text: "^today" }, { text: "^tomorrow" }, { text: "#tag" }, { text: "@project" }],
-      [{ text: "/brief" }, { text: "/last" }, { text: "/help" }],
+      [{ text: "/brief" }, { text: "/last" }, { text: "/done" }, { text: "/del" }, { text: "/help" }],
     ],
     resize_keyboard: true,
     one_time_keyboard: false,
@@ -336,6 +343,9 @@ async function handleCommand(chatId: string | number, text: string, supabase: an
       "Commands:",
       "/brief  (daily-style summary now)",
       "/last   (last 10 telegram captures)",
+      "/done   (toggle most recent task)",
+      "/done N (toggle Nth most recent task)",
+      "/del N  (delete Nth most recent item)",
       "",
       "Tip: paste multiple lines — I’ll split them.",
     ].join("\n");
@@ -411,6 +421,91 @@ async function handleCommand(chatId: string | number, text: string, supabase: an
     const msg = items.length ? `Last captures:\n${items.join("\n")}` : "No captures yet.";
 
     await tgSendMessage(chatId, msg, { reply_markup: smartKeyboard() });
+    return true;
+  }
+
+  if (cmd === "/del") {
+    const parts = text.trim().split(/\s+/);
+    const n = parseInt(parts[1] ?? "", 10);
+    if (!n || n < 1) {
+      await tgSendMessage(chatId, "Usage: /del N (e.g. /del 1 to delete the most recent item)", { reply_markup: smartKeyboard() });
+      return true;
+    }
+
+    const chatIdStr = String(chatId);
+    const { data, error: qErr } = await supabase
+      .from("lines")
+      .select("id, raw, bucket")
+      .filter("parsed->telegram_chat_id", "eq", `"${chatIdStr}"`)
+      .order("created_at", { ascending: false })
+      .limit(n);
+
+    if (qErr) {
+      await tgSendMessage(chatId, `Error: ${qErr.message}`);
+      return true;
+    }
+
+    if (!data || data.length < n) {
+      await tgSendMessage(chatId, `Only ${data?.length ?? 0} items found from this chat.`, { reply_markup: smartKeyboard() });
+      return true;
+    }
+
+    const target = data[n - 1];
+    const { error: delErr } = await supabase.from("lines").delete().eq("id", target.id);
+    if (delErr) {
+      await tgSendMessage(chatId, `Delete failed: ${delErr.message}`);
+      return true;
+    }
+
+    await tgSendMessage(chatId, `Deleted (${target.bucket}): ${target.raw}`, { reply_markup: smartKeyboard() });
+    return true;
+  }
+
+  if (cmd === "/done") {
+    const parts = text.trim().split(/\s+/);
+    const n = parseInt(parts[1] ?? "1", 10);
+    if (n < 1) {
+      await tgSendMessage(chatId, "Usage: /done or /done N", { reply_markup: smartKeyboard() });
+      return true;
+    }
+
+    const chatIdStr = String(chatId);
+    const { data, error: qErr } = await supabase
+      .from("lines")
+      .select("id, raw, parsed")
+      .eq("bucket", "tasks")
+      .filter("parsed->telegram_chat_id", "eq", `"${chatIdStr}"`)
+      .order("created_at", { ascending: false })
+      .limit(n);
+
+    if (qErr) {
+      await tgSendMessage(chatId, `Error: ${qErr.message}`);
+      return true;
+    }
+
+    if (!data || data.length < n) {
+      await tgSendMessage(chatId, `Only ${data?.length ?? 0} tasks found from this chat.`, { reply_markup: smartKeyboard() });
+      return true;
+    }
+
+    const target = data[n - 1];
+    const currentDone = target.parsed?.done === true;
+    const newDone = !currentDone;
+    const newRaw = setCheckbox(target.raw, newDone);
+    const newParsed = { ...(target.parsed ?? {}), done: newDone };
+
+    const { error: updErr } = await supabase
+      .from("lines")
+      .update({ raw: newRaw, parsed: newParsed })
+      .eq("id", target.id);
+
+    if (updErr) {
+      await tgSendMessage(chatId, `Update failed: ${updErr.message}`);
+      return true;
+    }
+
+    const status = newDone ? "done" : "open";
+    await tgSendMessage(chatId, `Task marked ${status}: ${newRaw}`, { reply_markup: smartKeyboard() });
     return true;
   }
 

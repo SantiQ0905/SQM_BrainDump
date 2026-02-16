@@ -29,7 +29,6 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return (await res.json()) as T;
 }
 
-
 export type LineItem = {
   id: string;
   created_at: string;
@@ -62,4 +61,20 @@ export const api = {
       body: JSON.stringify({ text, defaultBucket }),
     });
   },
+
+    toggleDone: (id: string, done: boolean) => {
+    return request<{ ok: boolean; id: string; done: boolean; raw: string }>(`/api/lines/toggle-done`, {
+      method: "POST",
+      body: JSON.stringify({ id, done }),
+    });
+  },
+
+  deleteLine: (id: string) => {
+    return request<{ ok: true; id: string }>(`/api/lines/delete`, {
+      method: "POST",
+      body: JSON.stringify({ id }),
+    });
+  },
+
 };
+

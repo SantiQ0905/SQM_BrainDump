@@ -44,6 +44,15 @@ export function InboxPage() {
     }
   }
 
+  async function deleteItem(id: string) {
+    setItems((prev) => prev.filter((it) => it.id !== id));
+    try {
+      await api.deleteLine(id);
+    } catch {
+      await refresh();
+    }
+  }
+
   return (
     <div>
       <div className="mb-8 flex items-baseline justify-between">
@@ -118,12 +127,23 @@ n: Idea for the robot telemetry @ftc`}
               {items.map((it, i) => (
                 <li
                   key={it.id}
-                  className={`group px-5 py-4 transition-colors hover:bg-stone-50 ${i > 0 ? "border-t border-neutral-100" : ""}`}
+                  className={`group flex items-start gap-3 px-5 py-4 transition-colors hover:bg-stone-50 ${i > 0 ? "border-t border-neutral-100" : ""}`}
                 >
-                  <div className="font-mono text-[13px] leading-relaxed text-neutral-800">
-                    {it.raw}
+                  <div className="min-w-0 flex-1">
+                    <div className="font-mono text-[13px] leading-relaxed text-neutral-800">
+                      {it.raw}
+                    </div>
+                    <LineMetadata item={it} />
                   </div>
-                  <LineMetadata item={it} />
+                  <button
+                    onClick={() => deleteItem(it.id)}
+                    className="shrink-0 rounded p-1 text-neutral-300 opacity-0 transition-all hover:bg-red-50 hover:text-red-400 group-hover:opacity-100"
+                    title="Delete"
+                  >
+                    <svg className="h-3.5 w-3.5" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                      <path d="M3 3l8 8M11 3l-8 8" />
+                    </svg>
+                  </button>
                 </li>
               ))}
             </ul>

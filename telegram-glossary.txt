@@ -1,0 +1,51 @@
+Brain Dump — Telegram Bot Glossary
+====================================
+
+BUCKET PREFIXES (route lines to specific buckets)
+  i:  inbox (default if no prefix)
+  t:  tasks
+  n:  notes
+  l:  links
+  j:  journal
+  a:  archive
+
+TOKENS (inline markers parsed from text)
+  [ ]       open task checkbox
+  [x]       completed task checkbox
+  !1        priority high (alias: !high)
+  !2        priority medium (alias: !med)
+  !3        priority low (alias: !low)
+  ^date     due date
+  #tag      tag (lowercase, alphanumeric + hyphens/underscores)
+  @project  project name
+
+DATE SHORTCUTS
+  ^today         resolves to today's date (YYYY-MM-DD, America/Monterrey TZ)
+  ^tomorrow      resolves to tomorrow's date
+  ^DD-MM         day-month, assumes current year
+  ^DD-MM-YYYY    day-month-year
+  ^YYYY-MM-DD    ISO format
+
+COMMANDS
+  /start    welcome message + keyboard
+  /help     show this glossary
+  /brief    daily-style summary (inbox count, due/overdue tasks, top 5)
+  /last     last 10 telegram captures
+  /done     toggle most recent task from this chat (open <-> done)
+  /done N   toggle the Nth most recent task (1-based)
+  /del N    delete the Nth most recent item from this chat (1-based, required)
+
+MULTI-LINE SUPPORT
+  Paste multiple lines in a single message — each line is parsed
+  and inserted independently. Lines can have different bucket prefixes.
+
+  Example message:
+    t: [ ] Buy groceries ^today #errands
+    n: The barista method works great
+    l: https://example.com #reading
+
+  This creates 3 separate entries: one task, one note, one link.
+
+SMART KEYBOARD
+  The bot provides a persistent keyboard with common prefixes,
+  tokens, and commands for quick input.
