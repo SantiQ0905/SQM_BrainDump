@@ -12,6 +12,24 @@ function json(res: any, status: number, body: any) {
   res.end(JSON.stringify(body));
 }
 
+async function notifyTelegram(supabase: any, message: string) {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  if (!token) return;
+  const { data } = await supabase.from("lines").select("parsed")
+    .eq("source", "telegram").order("created_at", { ascending: false }).limit(500);
+  const chatIds = new Set<string>();
+  for (const r of data ?? []) {
+    const cid = r?.parsed?.telegram_chat_id;
+    if (cid) chatIds.add(String(cid));
+  }
+  for (const cid of chatIds) {
+    await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ chat_id: cid, text: message, disable_web_page_preview: true }),
+    }).catch(() => {});
+  }
+}
+
 function setCheckbox(raw: string, done: boolean) {
   // If has checkbox token, flip it. If not, prepend one.
   if (/\[(x| )\]/i.test(raw)) {
@@ -65,6 +83,11 @@ export default async function handler(req: any, res: any) {
       .eq("id", id);
 
     if (updErr) return json(res, 500, { error: updErr.message });
+
+    const preview = newRaw.slice(0, 60);
+    const status = done ? "done" : "open";
+    const msg = `Web: Marked ${status}: ${preview}`;
+    notifyTelegram(supabase, msg).catch(() => {});
 
     return json(res, 200, { ok: true, id, done, raw: newRaw });
   } catch (e: any) {

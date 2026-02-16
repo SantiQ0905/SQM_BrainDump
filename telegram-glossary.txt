@@ -16,8 +16,9 @@ TOKENS (inline markers parsed from text)
   !2        priority medium (alias: !med)
   !3        priority low (alias: !low)
   ^date     due date
+  @HH:MM    due time (appended to ^date, e.g. ^today@14:30)
   #tag      tag (lowercase, alphanumeric + hyphens/underscores)
-  @project  project name
+  @project  project name (starts with letter, not confused with @HH:MM)
 
 DATE SHORTCUTS
   ^today         resolves to today's date (YYYY-MM-DD, America/Monterrey TZ)
@@ -25,6 +26,20 @@ DATE SHORTCUTS
   ^DD-MM         day-month, assumes current year
   ^DD-MM-YYYY    day-month-year
   ^YYYY-MM-DD    ISO format
+
+TIME TOKENS (optional, appended to any date with @)
+  ^today@14:30       due today at 2:30 PM
+  ^tomorrow@09:00    due tomorrow at 9 AM
+  ^2026-02-20@08:00  specific date and time
+  Default: if no @HH:MM is given, due_time defaults to 09:00
+
+REMINDERS
+  When a task has a due date + time, you'll receive Telegram reminders at:
+    - 1 hour before
+    - 30 minutes before
+    - 15 minutes before
+    - 5 minutes before
+  Reminders are checked every 5 minutes and deduplicated (sent only once each).
 
 COMMANDS
   /start    welcome message + keyboard
@@ -40,12 +55,23 @@ MULTI-LINE SUPPORT
   and inserted independently. Lines can have different bucket prefixes.
 
   Example message:
-    t: [ ] Buy groceries ^today #errands
+    t: [ ] Buy groceries ^today@14:30 #errands
     n: The barista method works great
     l: https://example.com #reading
 
-  This creates 3 separate entries: one task, one note, one link.
+  This creates 3 separate entries: one task (due today at 2:30 PM),
+  one note, one link.
 
 SMART KEYBOARD
   The bot provides a persistent keyboard with common prefixes,
   tokens, and commands for quick input.
+
+DAILY BRIEFS
+  Morning brief (7 AM): Inbox count, due today, overdue, top 5 tasks.
+  Evening brief (7 PM): Completed today, still open today, due tomorrow.
+  Triggered automatically by cron. DST-aware (skips if local hour is off).
+
+WEB NOTIFICATIONS
+  Actions from the web UI (add, delete, toggle done) send a summary
+  notification to all discovered Telegram chats, so you stay in sync
+  even when using the web interface.

@@ -39,6 +39,7 @@ export type LineItem = {
     tags?: string[];
     project?: string | null;
     due?: string | null;
+    due_time?: string | null;
     priority?: number | null;
     done?: boolean | null;
     urls?: string[];

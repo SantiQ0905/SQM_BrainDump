@@ -30,22 +30,42 @@ function extractAll(pattern: RegExp, text: string): string[] {
   return out;
 }
 
-/** Accept ^YYYY-MM-DD, ^DD-MM-YYYY, or ^DD-MM (assumes current year). */
-function parseDue(raw: string): string | null {
-  const iso = raw.match(/\^(\d{4})-(\d{2})-(\d{2})\b/);
-  if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
+/** Accept ^YYYY-MM-DD, ^DD-MM-YYYY, or ^DD-MM (assumes current year).
+ *  Optional @HH:MM suffix for time-of-day (e.g. ^today@14:30). */
+function parseDue(raw: string): { due: string | null; due_time: string | null } {
+  let due_time: string | null = null;
 
-  const dmy = raw.match(/\^(\d{1,2})-(\d{1,2})-(\d{4})\b/);
-  if (dmy)
-    return `${dmy[3]}-${dmy[2].padStart(2, "0")}-${dmy[1].padStart(2, "0")}`;
-
-  const dm = raw.match(/\^(\d{1,2})-(\d{1,2})(?!\d)/);
-  if (dm) {
-    const year = new Date().getFullYear();
-    return `${year}-${dm[2].padStart(2, "0")}-${dm[1].padStart(2, "0")}`;
+  function extractTime(m: RegExpMatchArray, timeGroup: number): void {
+    const hh = m[timeGroup];
+    const mm = m[timeGroup + 1];
+    if (hh !== undefined && mm !== undefined) {
+      due_time = `${hh}:${mm}`;
+    }
   }
 
-  return null;
+  // ISO: ^2026-02-15 or ^2026-02-15@14:30
+  const iso = raw.match(/\^(\d{4})-(\d{2})-(\d{2})(?:@(\d{2}):(\d{2}))?(?!\d)/);
+  if (iso) {
+    extractTime(iso, 4);
+    return { due: `${iso[1]}-${iso[2]}-${iso[3]}`, due_time };
+  }
+
+  // DD-MM-YYYY: ^15-02-2026 or ^15-02-2026@09:00
+  const dmy = raw.match(/\^(\d{1,2})-(\d{1,2})-(\d{4})(?:@(\d{2}):(\d{2}))?(?!\d)/);
+  if (dmy) {
+    extractTime(dmy, 4);
+    return { due: `${dmy[3]}-${dmy[2].padStart(2, "0")}-${dmy[1].padStart(2, "0")}`, due_time };
+  }
+
+  // DD-MM: ^15-02 or ^15-02@09:00 (assumes current year)
+  const dm = raw.match(/\^(\d{1,2})-(\d{1,2})(?:@(\d{2}):(\d{2}))?(?!\d)/);
+  if (dm) {
+    const year = new Date().getFullYear();
+    extractTime(dm, 3);
+    return { due: `${year}-${dm[2].padStart(2, "0")}-${dm[1].padStart(2, "0")}`, due_time };
+  }
+
+  return { due: null, due_time: null };
 }
 
 function splitIntoLines(text: string): string[] {
@@ -122,8 +142,8 @@ function parseLine(input: string, defaultBucket: Bucket = "inbox") {
   raw = normalizeShortcuts(raw, bucket);
 
   const tags = extractAll(/#([a-zA-Z0-9_-]+)/g, raw).map((t) => t.toLowerCase());
-  const projects = extractAll(/@([a-zA-Z0-9_-]+)/g, raw).map((p) => p.toLowerCase());
-  const due = parseDue(raw);
+  const projects = extractAll(/@(?!\d{2}:\d{2})([a-zA-Z0-9_-]+)/g, raw).map((p) => p.toLowerCase());
+  const { due, due_time } = parseDue(raw);
   const priority = raw.match(/!(1|2|3)\b/)?.[1] ?? null;
 
   const doneToken = raw.match(/\[(x| )\]/i)?.[1] ?? null;
@@ -136,6 +156,7 @@ function parseLine(input: string, defaultBucket: Bucket = "inbox") {
     project: projects.length ? projects[0] : null,
     projects,
     due,
+    due_time: due ? (due_time ?? "09:00") : null,
     priority: priority ? Number(priority) : null,
     done,
     urls,
@@ -336,9 +357,14 @@ async function handleCommand(chatId: string | number, text: string, supabase: an
       "Tokens:",
       "[ ] open task, [x] done",
       "!1 !2 !3 priority",
-      "^YYYY-MM-DD due",
-      "^today, ^tomorrow shortcuts",
+      "^YYYY-MM-DD due (+ @HH:MM for time)",
+      "^today@14:30, ^tomorrow@09:00",
       "#tag @project",
+      "",
+      "Reminders:",
+      "Add @HH:MM to a due date for timed reminders.",
+      "You'll get alerts at 1h, 30m, 15m, 5m before.",
+      "Default time is 09:00 if no @HH:MM given.",
       "",
       "Commands:",
       "/brief  (daily-style summary now)",

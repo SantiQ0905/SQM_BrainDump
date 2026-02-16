@@ -6,8 +6,12 @@
 
     "crons": [
     {
-      "path": "/api/cron/daily-brief",
-      "schedule": "0 14 * * *"
+      "path": "/api/cron/daily-brief?type=morning",
+      "schedule": "0 13 * * *"
+    },
+    {
+      "path": "/api/cron/daily-brief?type=evening",
+      "schedule": "0 1 * * *"
     }
   ]
 
