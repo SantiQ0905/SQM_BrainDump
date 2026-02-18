@@ -4,7 +4,7 @@ import { createClient } from "@supabase/supabase-js";
    Parser (inlined to avoid Vercel module-resolution issues)
    ────────────────────────────────────────────────────────────── */
 
-type Bucket = "inbox" | "tasks" | "notes" | "links" | "journal" | "archive";
+type Bucket = "inbox" | "tasks" | "notes" | "links" | "journal" | "archive" | "habits" | "mood";
 
 const BUCKET_PREFIX: Record<string, Bucket> = {
   "i:": "inbox",
@@ -13,6 +13,8 @@ const BUCKET_PREFIX: Record<string, Bucket> = {
   "l:": "links",
   "j:": "journal",
   "a:": "archive",
+  "h:": "habits",
+  "m:": "mood",
 };
 
 function normalizeLine(s: string) {
@@ -348,11 +350,8 @@ async function handleCommand(chatId: string | number, text: string, supabase: an
       "",
       "Routing:",
       "i: inbox (default)",
-      "t: tasks",
-      "n: notes",
-      "l: links",
-      "j: journal",
-      "a: archive",
+      "t: tasks  n: notes  l: links",
+      "j: journal  a: archive",
       "",
       "Tokens:",
       "[ ] open task, [x] done",
@@ -361,19 +360,25 @@ async function handleCommand(chatId: string | number, text: string, supabase: an
       "^today@14:30, ^tomorrow@09:00",
       "#tag @project",
       "",
-      "Reminders:",
-      "Add @HH:MM to a due date for timed reminders.",
-      "You'll get alerts at 1h, 30m, 15m, 5m before.",
-      "Default time is 09:00 if no @HH:MM given.",
+      "Habit Tracker:",
+      "HT: 1-YES, 2-NO, 3-YES  (log today's habits)",
+      "HT: 1 3 5  (shorthand: those are YES, rest NO)",
+      "",
+      "Mood Tracker:",
+      "MD: 4  (log today's mood, scale 1-5)",
       "",
       "Commands:",
-      "/brief  (daily-style summary now)",
-      "/last   (last 10 telegram captures)",
-      "/done   (toggle most recent task)",
-      "/done N (toggle Nth most recent task)",
-      "/del N  (delete Nth most recent item)",
+      "/brief       daily summary",
+      "/last        last 10 captures",
+      "/done [N]    toggle task done",
+      "/del N       delete item",
+      "/habits      show today's habit list",
+      "/listhabits  list all configured habits",
+      "/addhabit X  add a new habit",
+      "/mood        show mood prompt",
+      "/streak      show streaks & stats",
       "",
-      "Tip: paste multiple lines — I’ll split them.",
+      "Tip: paste multiple lines — I'll split them.",
     ].join("\n");
 
     await tgSendMessage(chatId, help, { reply_markup: smartKeyboard() });
@@ -535,7 +540,348 @@ async function handleCommand(chatId: string | number, text: string, supabase: an
     return true;
   }
 
+  // ── /listhabits ────────────────────────────────────────────────
+  if (cmd === "/listhabits") {
+    const { data: habits } = await supabase
+      .from("habit_definitions")
+      .select("*")
+      .order("sort_order", { ascending: true });
+
+    if (!habits || habits.length === 0) {
+      await tgSendMessage(chatId, "No habits configured yet. Use /addhabit <name> to add one.", { reply_markup: smartKeyboard() });
+      return true;
+    }
+
+    const lines: string[] = ["Your habits:"];
+    for (const h of habits) {
+      const status = h.active ? "✓" : "✗";
+      lines.push(`${status} ${h.sort_order}. ${h.name} [${h.id.slice(0, 8)}]`);
+    }
+    lines.push("\n✓=active ✗=inactive");
+    await tgSendMessage(chatId, lines.join("\n"), { reply_markup: smartKeyboard() });
+    return true;
+  }
+
+  // ── /addhabit <name> ───────────────────────────────────────────
+  if (cmd === "/addhabit") {
+    const name = text.trim().slice("/addhabit".length).trim();
+    if (!name) {
+      await tgSendMessage(chatId, "Usage: /addhabit <habit name>\nExample: /addhabit Read 30 minutes", { reply_markup: smartKeyboard() });
+      return true;
+    }
+
+    const { data: existing } = await supabase
+      .from("habit_definitions")
+      .select("sort_order")
+      .order("sort_order", { ascending: false })
+      .limit(1);
+
+    const maxOrder = (existing?.[0]?.sort_order ?? 0) + 1;
+
+    const { error } = await supabase
+      .from("habit_definitions")
+      .insert({ name, sort_order: maxOrder });
+
+    if (error) {
+      await tgSendMessage(chatId, `Failed to add habit: ${error.message}`);
+      return true;
+    }
+
+    await tgSendMessage(chatId, `Habit added: "${name}" (position ${maxOrder})`, { reply_markup: smartKeyboard() });
+    return true;
+  }
+
+  // ── /habits ────────────────────────────────────────────────────
+  if (cmd === "/habits") {
+    const today = ymdInTZ(new Date(), TZ);
+
+    const [{ data: habits }, { data: logs }] = await Promise.all([
+      supabase
+        .from("habit_definitions")
+        .select("id, name, sort_order")
+        .eq("active", true)
+        .order("sort_order", { ascending: true }),
+      supabase
+        .from("lines")
+        .select("parsed")
+        .eq("bucket", "habits")
+        .order("created_at", { ascending: false })
+        .limit(10),
+    ]);
+
+    const activeHabits = habits ?? [];
+    if (!activeHabits.length) {
+      await tgSendMessage(chatId, "No active habits. Use /addhabit <name> to configure.", { reply_markup: smartKeyboard() });
+      return true;
+    }
+
+    const todayLog = (logs ?? []).find((r: any) => r.parsed?.date === today);
+    const todayResults = todayLog?.parsed?.results ?? {};
+
+    const lines: string[] = [`Habit Check-in (${today}):`];
+    for (const h of activeHabits) {
+      const done = todayResults[h.id];
+      const icon = done === true ? "✓" : done === false ? "✗" : "○";
+      lines.push(`${icon} ${h.sort_order}. ${h.name}`);
+    }
+
+    if (todayLog) {
+      const doneCount = activeHabits.filter((h: any) => todayResults[h.id] === true).length;
+      lines.push(`\nToday: ${doneCount}/${activeHabits.length} done ✅`);
+    } else {
+      lines.push("\nReply: HT: 1-YES, 2-NO, 3-YES...");
+    }
+
+    await tgSendMessage(chatId, lines.join("\n"), { reply_markup: smartKeyboard() });
+    return true;
+  }
+
+  // ── /mood ──────────────────────────────────────────────────────
+  if (cmd === "/mood") {
+    const today = ymdInTZ(new Date(), TZ);
+
+    const { data: logs } = await supabase
+      .from("lines")
+      .select("parsed")
+      .eq("bucket", "mood")
+      .order("created_at", { ascending: false })
+      .limit(10);
+
+    const todayLog = (logs ?? []).find((r: any) => r.parsed?.date === today);
+
+    if (todayLog) {
+      await tgSendMessage(chatId, `Today's mood already logged: ${todayLog.parsed?.score}/5 ✓\nTo update, reply: MD: <1-5>`, { reply_markup: smartKeyboard() });
+    } else {
+      await tgSendMessage(chatId, `Mood check: How was today?\n1=Terrible  2=Bad  3=OK  4=Good  5=Great\nReply: MD: 4`, { reply_markup: smartKeyboard() });
+    }
+    return true;
+  }
+
+  // ── /streak ────────────────────────────────────────────────────
+  if (cmd === "/streak") {
+    const today = ymdInTZ(new Date(), TZ);
+
+    const [{ data: habitLogs }, { data: moodLogs }, { data: taskRows }] = await Promise.all([
+      supabase
+        .from("lines")
+        .select("parsed")
+        .eq("bucket", "habits")
+        .order("created_at", { ascending: false })
+        .limit(60),
+      supabase
+        .from("lines")
+        .select("parsed")
+        .eq("bucket", "mood")
+        .order("created_at", { ascending: false })
+        .limit(60),
+      supabase
+        .from("lines")
+        .select("parsed, created_at")
+        .eq("bucket", "tasks")
+        .order("created_at", { ascending: false })
+        .limit(200),
+    ]);
+
+    function computeStreak(dates: string[]): number {
+      if (!dates.length) return 0;
+      const dateSet = new Set(dates);
+      let cursor = today;
+      if (!dateSet.has(cursor)) {
+        const yesterday = new Date();
+        yesterday.setDate(yesterday.getDate() - 1);
+        cursor = ymdInTZ(yesterday, TZ);
+        if (!dateSet.has(cursor)) return 0;
+      }
+      let streak = 0;
+      let d = new Date(cursor + "T12:00:00Z");
+      while (true) {
+        const ymd = ymdInTZ(d, TZ);
+        if (!dateSet.has(ymd)) break;
+        streak++;
+        d.setDate(d.getDate() - 1);
+      }
+      return streak;
+    }
+
+    const habitStreak = computeStreak(
+      (habitLogs ?? []).map((r: any) => r.parsed?.date).filter(Boolean)
+    );
+    const moodStreak = computeStreak(
+      (moodLogs ?? []).map((r: any) => r.parsed?.date).filter(Boolean)
+    );
+
+    const last7Mood = (moodLogs ?? []).slice(0, 7).map((r: any) => r.parsed?.score).filter(Boolean);
+    const moodAvg = last7Mood.length
+      ? (last7Mood.reduce((a: number, b: number) => a + b, 0) / last7Mood.length).toFixed(1)
+      : "–";
+
+    const recentTasks = (taskRows ?? []).filter((t: any) => {
+      const d = t.created_at?.slice(0, 10) ?? "";
+      const ago = new Date();
+      ago.setDate(ago.getDate() - 30);
+      return d >= ymdInTZ(ago, TZ);
+    });
+    const doneTasks = recentTasks.filter((t: any) => t?.parsed?.done === true).length;
+    const rate = recentTasks.length
+      ? Math.round((doneTasks / recentTasks.length) * 100)
+      : 0;
+
+    const lines = [
+      `Streaks & Stats (${today}):`,
+      ``,
+      `Habit streak:   ${habitStreak} day${habitStreak !== 1 ? "s" : ""}`,
+      `Mood streak:    ${moodStreak} day${moodStreak !== 1 ? "s" : ""}`,
+      `Mood avg (7d):  ${moodAvg}/5`,
+      `Task done (30d): ${doneTasks}/${recentTasks.length} (${rate}%)`,
+    ];
+
+    await tgSendMessage(chatId, lines.join("\n"), { reply_markup: smartKeyboard() });
+    return true;
+  }
+
   return false;
+}
+
+/* ──────────────────────────────────────────────────────────────
+   Habit log parser: "HT: 1-YES, 2-NO, 3-YES" or "HT: 1 3 5"
+   ────────────────────────────────────────────────────────────── */
+
+async function handleHabitLog(
+  chatId: string | number,
+  text: string,
+  supabase: any,
+  chatIdStr: string,
+  userId: string | null
+): Promise<boolean> {
+  const match = text.match(/^HT:\s*(.+)$/i);
+  if (!match) return false;
+
+  const body = match[1].trim();
+  const today = ymdInTZ(new Date(), TZ);
+
+  const { data: habits } = await supabase
+    .from("habit_definitions")
+    .select("id, name, sort_order")
+    .eq("active", true)
+    .order("sort_order", { ascending: true });
+
+  const activeHabits: any[] = habits ?? [];
+  if (!activeHabits.length) {
+    await tgSendMessage(chatId, "No active habits configured. Use /addhabit <name>.");
+    return true;
+  }
+
+  const results: Record<string, boolean> = {};
+
+  // Check for "1-YES, 2-NO" format
+  const fullPairs = body.match(/\d+-(?:YES|NO|Y|N)/gi);
+  if (fullPairs && fullPairs.length > 0) {
+    for (const pair of fullPairs) {
+      const m = pair.match(/^(\d+)-?(YES|NO|Y|N)$/i);
+      if (!m) continue;
+      const idx = parseInt(m[1]) - 1;
+      if (idx >= 0 && idx < activeHabits.length) {
+        results[activeHabits[idx].id] = /^(YES|Y)$/i.test(m[2]);
+      }
+    }
+    // Fill unmentioned habits as NO
+    for (const h of activeHabits) {
+      if (!(h.id in results)) results[h.id] = false;
+    }
+  } else {
+    // Shorthand: "1 3 5" → those indices are YES, rest NO
+    const nums = body.match(/\d+/g)?.map(Number) ?? [];
+    const yesSet = new Set(nums);
+    for (let i = 0; i < activeHabits.length; i++) {
+      results[activeHabits[i].id] = yesSet.has(i + 1);
+    }
+  }
+
+  if (!Object.keys(results).length) {
+    await tgSendMessage(chatId, "Couldn't parse habit response. Try: HT: 1-YES, 2-NO, 3-YES");
+    return true;
+  }
+
+  // Build raw text
+  const resultLines = activeHabits.map((h: any, i: number) =>
+    `${i + 1}. ${h.name}: ${results[h.id] ? "YES" : "NO"}`
+  );
+  const raw = `Habits ${today}:\n${resultLines.join("\n")}`;
+  const parsed: Record<string, any> = { date: today, results, telegram_chat_id: chatIdStr };
+  if (userId) parsed.telegram_user_id = userId;
+
+  // Upsert
+  const { data: existing } = await supabase
+    .from("lines")
+    .select("id, parsed")
+    .eq("bucket", "habits")
+    .order("created_at", { ascending: false })
+    .limit(10);
+
+  const existingForDate = (existing ?? []).find((r: any) => r.parsed?.date === today);
+
+  if (existingForDate) {
+    await supabase.from("lines").update({ raw, parsed }).eq("id", existingForDate.id);
+  } else {
+    await supabase.from("lines").insert({ bucket: "habits", raw, source: "telegram", parsed });
+  }
+
+  const doneCount = activeHabits.filter((h: any) => results[h.id]).length;
+  const confirmLines = activeHabits.map((h: any, i: number) =>
+    `${results[h.id] ? "✓" : "✗"} ${i + 1}. ${h.name}`
+  );
+  await tgSendMessage(chatId,
+    `Habits logged ✅ (${doneCount}/${activeHabits.length}):\n${confirmLines.join("\n")}`,
+    { reply_markup: smartKeyboard() }
+  );
+  return true;
+}
+
+/* ──────────────────────────────────────────────────────────────
+   Mood log parser: "MD: 4" or "Mood: 3"
+   ────────────────────────────────────────────────────────────── */
+
+async function handleMoodLog(
+  chatId: string | number,
+  text: string,
+  supabase: any,
+  chatIdStr: string,
+  userId: string | null
+): Promise<boolean> {
+  const match = text.match(/^(?:MD|Mood):\s*([1-5])\s*(.*)$/i);
+  if (!match) return false;
+
+  const score = parseInt(match[1]);
+  const notes = match[2].trim();
+  const today = ymdInTZ(new Date(), TZ);
+
+  const raw = notes ? `Mood ${today}: ${score}/5 — ${notes}` : `Mood ${today}: ${score}/5`;
+  const parsed: Record<string, any> = { date: today, score, telegram_chat_id: chatIdStr };
+  if (notes) parsed.notes = notes;
+  if (userId) parsed.telegram_user_id = userId;
+
+  // Upsert
+  const { data: existing } = await supabase
+    .from("lines")
+    .select("id, parsed")
+    .eq("bucket", "mood")
+    .order("created_at", { ascending: false })
+    .limit(10);
+
+  const existingForDate = (existing ?? []).find((r: any) => r.parsed?.date === today);
+
+  if (existingForDate) {
+    await supabase.from("lines").update({ raw, parsed }).eq("id", existingForDate.id);
+  } else {
+    await supabase.from("lines").insert({ bucket: "mood", raw, source: "telegram", parsed });
+  }
+
+  const MOOD_LABELS: Record<number, string> = { 1: "Terrible", 2: "Bad", 3: "OK", 4: "Good", 5: "Great" };
+  const label = MOOD_LABELS[score] ?? "";
+  const stars = "⭐".repeat(score);
+  const msg = `Mood logged ✅ — ${score}/5 ${label} ${stars}${notes ? `\nNote: ${notes}` : ""}`;
+  await tgSendMessage(chatId, msg, { reply_markup: smartKeyboard() });
+  return true;
 }
 
 /* ──────────────────────────────────────────────────────────────
@@ -578,14 +924,26 @@ export default async function handler(req: any, res: any) {
       auth: { persistSession: false },
     });
 
+    const userId = msg?.from?.id?.toString?.() ?? null;
+    const chatIdStr = chatId?.toString?.() ?? null;
+
     // Commands
     if (text.trim().startsWith("/")) {
       const handled = await handleCommand(chatId, text, supabase);
       return json(res, 200, { ok: true, command: handled });
     }
 
-    const userId = msg?.from?.id?.toString?.() ?? null;
-    const chatIdStr = chatId?.toString?.() ?? null;
+    // Habit log pattern: "HT: 1-YES, 2-NO, 3-YES"  or  "HT: 1 3 5"
+    if (/^HT:/i.test(text.trim())) {
+      const handled = await handleHabitLog(chatId, text.trim(), supabase, chatIdStr!, userId);
+      if (handled) return json(res, 200, { ok: true, habit_log: true });
+    }
+
+    // Mood log pattern: "MD: 4"  or  "Mood: 3 great day"
+    if (/^(?:MD|Mood):/i.test(text.trim())) {
+      const handled = await handleMoodLog(chatId, text.trim(), supabase, chatIdStr!, userId);
+      if (handled) return json(res, 200, { ok: true, mood_log: true });
+    }
 
     const lines = splitIntoLines(text);
 
@@ -596,6 +954,8 @@ export default async function handler(req: any, res: any) {
       links: 0,
       journal: 0,
       archive: 0,
+      habits: 0,
+      mood: 0,
     };
 
     const rows = lines

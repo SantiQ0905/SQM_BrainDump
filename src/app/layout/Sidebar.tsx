@@ -13,6 +13,9 @@ const NAV_ITEMS: { to: string; label: string; icon: string }[] = [
   { to: "/notes", label: "Notes", icon: "N" },
   { to: "/bookmarks", label: "Bookmarks", icon: "B" },
   { to: "/journal", label: "Journal", icon: "J" },
+  { to: "/habits", label: "Habits", icon: "H" },
+  { to: "/mood", label: "Mood", icon: "M" },
+  { to: "/metrics", label: "Metrics", icon: "~" },
 ];
 
 export function Sidebar() {

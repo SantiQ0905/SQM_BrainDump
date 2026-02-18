@@ -2,17 +2,5 @@
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api/$1" },
     { "source": "/(.*)", "destination": "/index.html" }
-  ],
-
-    "crons": [
-    {
-      "path": "/api/cron/daily-brief?type=morning",
-      "schedule": "0 13 * * *"
-    },
-    {
-      "path": "/api/cron/daily-brief?type=evening",
-      "schedule": "0 1 * * *"
-    }
   ]
-
 }

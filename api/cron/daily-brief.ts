@@ -34,6 +34,15 @@ function addDays(date: Date, days: number) {
   return d;
 }
 
+function getDayOfWeek(tz: string): number {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz, weekday: "short",
+  }).formatToParts(new Date());
+  const day = parts.find((p) => p.type === "weekday")?.value ?? "Mon";
+  const map: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+  return map[day] ?? 0;
+}
+
 function getLocalHour(tz: string): number {
   const parts = new Intl.DateTimeFormat("en-US", {
     timeZone: tz,
@@ -221,6 +230,31 @@ export default async function handler(req: any, res: any) {
       if (inboxErr) return json(res, 500, { error: inboxErr.message });
       const inboxCount = (inboxRows ?? []).length;
       msgText = buildMorningBrief(today, inboxCount, openTasks, dueToday, overdue);
+
+      // Monday: append weekly mood review
+      if (getDayOfWeek(TZ) === 1) {
+        const { data: moodRows } = await supabase
+          .from("lines")
+          .select("parsed")
+          .eq("bucket", "mood")
+          .order("created_at", { ascending: false })
+          .limit(7);
+
+        const moodLogs = moodRows ?? [];
+        if (moodLogs.length > 0) {
+          const scores = moodLogs.map((r: any) => r.parsed?.score).filter(Boolean) as number[];
+          const avg = scores.length
+            ? (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(1)
+            : null;
+          if (avg) {
+            const entries = moodLogs
+              .slice(0, 7)
+              .map((r: any) => `${r.parsed?.date ?? "?"}: ${r.parsed?.score ?? "?"}/5`)
+              .join("\n");
+            msgText += `\n\nWeekly mood review:\n${entries}\nAverage: ${avg}/5`;
+          }
+        }
+      }
     }
 
     for (const cid of chatIds) {

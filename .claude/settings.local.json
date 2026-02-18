@@ -15,7 +15,9 @@
       "Bash(npx vercel:*)",
       "Bash(gh api:*)",
       "Bash(git commit:*)",
-      "Bash(cd:*)"
+      "Bash(cd:*)",
+      "Bash(echo:*)",
+      "Bash(node_modules/.bin/tsc:*)"
     ]
   }
 }

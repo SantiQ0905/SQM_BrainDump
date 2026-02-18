@@ -32,7 +32,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 export type LineItem = {
   id: string;
   created_at: string;
-  bucket: "inbox" | "tasks" | "notes" | "links" | "journal" | "archive";
+  bucket: "inbox" | "tasks" | "notes" | "links" | "journal" | "archive" | "habits" | "mood";
   raw: string;
   source: "web" | "telegram";
   parsed: {
@@ -43,7 +43,59 @@ export type LineItem = {
     priority?: number | null;
     done?: boolean | null;
     urls?: string[];
+    // habit log fields
+    date?: string;
+    results?: Record<string, boolean>;
+    // mood log fields
+    score?: number;
+    notes?: string;
   };
+};
+
+export type HabitDefinition = {
+  id: string;
+  name: string;
+  sort_order: number;
+  active: boolean;
+  created_at: string;
+};
+
+export type HabitLog = {
+  id: string;
+  created_at: string;
+  parsed: {
+    date: string;
+    results: Record<string, boolean>;
+  };
+};
+
+export type MoodLog = {
+  id: string;
+  created_at: string;
+  parsed: {
+    date: string;
+    score: number;
+    notes?: string;
+  };
+};
+
+export type Metrics = {
+  today: string;
+  habitStreak: number;
+  moodStreak: number;
+  moodWeeklyAvg: number | null;
+  todayHabitsDone: number;
+  todayHabitsTotal: number;
+  taskCompletionRate: number | null;
+  tasksCompleted30d: number;
+  tasksTotal30d: number;
+  last14: Array<{
+    date: string;
+    habitsDone: number;
+    habitsTotal: number;
+    mood: number | null;
+    tasksDone: number;
+  }>;
 };
 
 export const api = {
@@ -76,6 +128,43 @@ export const api = {
       body: JSON.stringify({ id }),
     });
   },
+
+  // ── Habits ──────────────────────────────────────────────────────
+  habits: () =>
+    request<{ habits: HabitDefinition[] }>(`/api/habits`),
+
+  habitAction: (action: "add" | "toggle" | "delete", payload: Record<string, string>) =>
+    request<{ habit?: HabitDefinition; ok?: boolean }>(`/api/habits`, {
+      method: "POST",
+      body: JSON.stringify({ action, ...payload }),
+    }),
+
+  habitLog: (params?: { days?: number }) => {
+    const q = params?.days ? `?days=${params.days}` : "";
+    return request<{ habits: HabitDefinition[]; logs: HabitLog[] }>(`/api/habits/log${q}`);
+  },
+
+  logHabits: (date: string, results: Record<string, boolean>) =>
+    request<{ ok: boolean; updated?: boolean; created?: boolean; date: string }>(`/api/habits/log`, {
+      method: "POST",
+      body: JSON.stringify({ date, results }),
+    }),
+
+  // ── Mood ────────────────────────────────────────────────────────
+  mood: (params?: { days?: number }) => {
+    const q = params?.days ? `?days=${params.days}` : "";
+    return request<{ logs: MoodLog[]; todayLog: MoodLog | null; weeklyAvg: number | null }>(`/api/mood${q}`);
+  },
+
+  logMood: (date: string, score: number, notes?: string) =>
+    request<{ ok: boolean; date: string; score: number }>(`/api/mood`, {
+      method: "POST",
+      body: JSON.stringify({ date, score, notes }),
+    }),
+
+  // ── Metrics ─────────────────────────────────────────────────────
+  metrics: () =>
+    request<Metrics>(`/api/metrics`),
 
 };
 

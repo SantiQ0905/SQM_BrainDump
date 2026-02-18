@@ -9,6 +9,9 @@ import { TasksPage } from "./features/tasks/TasksPage";
 import { NotesPage } from "./features/notes/NotesPage";
 import { BookmarksPage } from "./features/bookmarks/BookmarksPage";
 import { LinesPage } from "./features/lines/LinesPage";
+import { HabitTrackerPage } from "./features/habits/HabitTrackerPage";
+import { MoodTrackerPage } from "./features/mood/MoodTrackerPage";
+import { MetricsPage } from "./features/metrics/MetricsPage";
 
 const router = createBrowserRouter([
   { path: "/", element: <Navigate to="/inbox" replace /> },
@@ -25,6 +28,9 @@ const router = createBrowserRouter([
       { path: "notes", element: <NotesPage /> },
       { path: "bookmarks", element: <BookmarksPage /> },
       { path: "journal", element: <LinesPage bucket="journal" /> },
+      { path: "habits", element: <HabitTrackerPage /> },
+      { path: "mood", element: <MoodTrackerPage /> },
+      { path: "metrics", element: <MetricsPage /> },
     ],
   },
 ]);
