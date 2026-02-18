@@ -18,20 +18,12 @@ const MOOD_LABELS: Record<number, string> = {
   5: "Great",
 };
 
-const MOOD_COLORS: Record<number, string> = {
-  1: "bg-red-100 text-red-600 border-red-200",
-  2: "bg-orange-100 text-orange-600 border-orange-200",
-  3: "bg-amber-100 text-amber-600 border-amber-200",
-  4: "bg-lime-100 text-lime-600 border-lime-200",
-  5: "bg-green-100 text-green-600 border-green-200",
-};
-
-const MOOD_RING: Record<number, string> = {
-  1: "ring-red-400 bg-red-50",
-  2: "ring-orange-400 bg-orange-50",
-  3: "ring-amber-400 bg-amber-50",
-  4: "ring-lime-400 bg-lime-50",
-  5: "ring-green-400 bg-green-50",
+const MOOD_COLORS: Record<number, { pill: string; ring: string }> = {
+  1: { pill: "bg-red-500/15 text-red-400 border-red-500/30",    ring: "ring-red-500/40 bg-red-500/10" },
+  2: { pill: "bg-orange-500/15 text-orange-400 border-orange-500/30", ring: "ring-orange-500/40 bg-orange-500/10" },
+  3: { pill: "bg-amber-500/15 text-amber-400 border-amber-500/30",  ring: "ring-amber-500/40 bg-amber-500/10" },
+  4: { pill: "bg-lime-500/15 text-lime-400 border-lime-500/30",    ring: "ring-lime-500/40 bg-lime-500/10" },
+  5: { pill: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30", ring: "ring-emerald-500/40 bg-emerald-500/10" },
 };
 
 export function MoodTrackerPage() {
@@ -85,16 +77,16 @@ export function MoodTrackerPage() {
   }
 
   return (
-    <div>
+    <div className="animate-page">
       <div className="mb-8 flex items-baseline justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-neutral-900">Mood Tracker</h1>
-          <p className="mt-1 text-sm text-neutral-400">
+          <h1 className="text-2xl font-bold tracking-tight text-primary">Mood Tracker</h1>
+          <p className="mt-1 text-sm text-muted">
             Daily quality of day (1=worst, 5=best). Prompted at 10 PM.
           </p>
         </div>
         {weeklyAvg !== null && (
-          <span className="rounded-full bg-neutral-200/60 px-3 py-1 text-xs font-medium text-neutral-500">
+          <span className="rounded-full bg-[var(--surface-raised)] border border-app px-3 py-1 text-xs font-medium text-secondary">
             7-day avg: {weeklyAvg}/5
           </span>
         )}
@@ -104,37 +96,40 @@ export function MoodTrackerPage() {
         {/* Left column */}
         <div className="space-y-4">
           {/* Today's entry */}
-          <div className="rounded-2xl border border-neutral-200/80 bg-white p-5 shadow-sm">
+          <div className="rounded-2xl border border-app bg-surface p-5 shadow-sm transition-colors">
             <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-neutral-700">Today — {today}</h2>
+              <h2 className="text-sm font-semibold text-primary">Today — {today}</h2>
               {todayLog && (
-                <span className="rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-medium text-green-600">
+                <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-semibold text-emerald-400">
                   Logged ✓
                 </span>
               )}
             </div>
 
             <div className="mb-4 grid grid-cols-5 gap-2">
-              {[1, 2, 3, 4, 5].map((score) => (
-                <button
-                  key={score}
-                  onClick={() => setSelectedScore(score)}
-                  className={`flex flex-col items-center rounded-xl border-2 px-1 py-3 transition-all ${
-                    selectedScore === score
-                      ? `ring-2 ring-offset-1 ${MOOD_RING[score]} border-transparent`
-                      : "border-neutral-200 hover:border-neutral-300"
-                  }`}
-                >
-                  <span className="text-lg font-bold text-neutral-700">{score}</span>
-                  <span className="mt-0.5 text-[9px] font-medium text-neutral-400 leading-tight text-center">
-                    {MOOD_LABELS[score]}
-                  </span>
-                </button>
-              ))}
+              {[1, 2, 3, 4, 5].map((score) => {
+                const c = MOOD_COLORS[score];
+                return (
+                  <button
+                    key={score}
+                    onClick={() => setSelectedScore(score)}
+                    className={`flex flex-col items-center rounded-xl border-2 px-1 py-3 transition-all ${
+                      selectedScore === score
+                        ? `ring-2 ring-offset-1 ring-offset-[var(--surface)] ${c.ring} border-transparent`
+                        : "border-app hover:border-[var(--border)]"
+                    }`}
+                  >
+                    <span className="text-lg font-bold text-primary">{score}</span>
+                    <span className="mt-0.5 text-center text-[9px] font-medium leading-tight text-muted">
+                      {MOOD_LABELS[score]}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
 
             <textarea
-              className="w-full resize-none rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2 text-[13px] text-neutral-800 placeholder:text-neutral-300 outline-none focus:border-neutral-400"
+              className="w-full resize-none rounded-lg border border-app bg-[var(--surface-raised)] px-3 py-2 text-[13px] text-primary placeholder:text-faint outline-none focus:border-[var(--accent)]/40 transition-colors"
               rows={2}
               placeholder="Optional note about today…"
               value={notes}
@@ -144,32 +139,32 @@ export function MoodTrackerPage() {
             <button
               onClick={saveMood}
               disabled={saving || !selectedScore}
-              className="mt-3 w-full rounded-lg bg-neutral-900 px-4 py-2 text-xs font-semibold text-white shadow-sm transition-all hover:bg-neutral-800 active:scale-[0.97] disabled:opacity-40"
+              className="mt-3 w-full rounded-lg bg-[var(--accent)] px-4 py-2 text-xs font-semibold text-[var(--accent-fg)] shadow-sm transition-all hover:bg-[var(--accent-hover)] active:scale-[0.97] disabled:opacity-40"
             >
-              {saving ? "Saving..." : todayLog ? "Update Mood" : "Log Mood"}
+              {saving ? "Saving…" : todayLog ? "Update Mood" : "Log Mood"}
             </button>
 
             {error && (
-              <div className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">{error}</div>
+              <div className="mt-3 rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-400">{error}</div>
             )}
           </div>
 
           {/* Weekly summary */}
           {!loading && logs.length > 0 && (
-            <div className="rounded-2xl border border-neutral-200/80 bg-white p-5 shadow-sm">
-              <h2 className="mb-3 text-sm font-semibold text-neutral-700">Last 7 Days</h2>
+            <div className="rounded-2xl border border-app bg-surface p-5 shadow-sm transition-colors">
+              <h2 className="mb-3 text-sm font-semibold text-primary">Last 7 Days</h2>
               <div className="space-y-2">
                 {logs.slice(0, 7).map((log) => {
                   const score = log.parsed?.score ?? 0;
-                  const cls = MOOD_COLORS[score] ?? "bg-neutral-100 text-neutral-500 border-neutral-200";
+                  const c = MOOD_COLORS[score] ?? { pill: "bg-[var(--surface-raised)] text-secondary border-app" };
                   return (
                     <div key={log.id} className="flex items-center gap-2">
-                      <span className="w-24 shrink-0 text-[11px] text-neutral-400">{log.parsed?.date}</span>
-                      <span className={`rounded-md border px-2 py-0.5 text-[11px] font-semibold ${cls}`}>
+                      <span className="w-24 shrink-0 text-[11px] text-muted">{log.parsed?.date}</span>
+                      <span className={`rounded-md border px-2 py-0.5 text-[11px] font-semibold ${c.pill}`}>
                         {score}/5 {MOOD_LABELS[score]}
                       </span>
                       {log.parsed?.notes && (
-                        <span className="truncate text-[11px] text-neutral-400" title={log.parsed.notes}>
+                        <span className="truncate text-[11px] text-muted" title={log.parsed.notes}>
                           {log.parsed.notes}
                         </span>
                       )}
@@ -177,8 +172,8 @@ export function MoodTrackerPage() {
                   );
                 })}
                 {weeklyAvg !== null && (
-                  <div className="mt-3 border-t border-neutral-100 pt-3">
-                    <span className="text-[12px] font-semibold text-neutral-600">
+                  <div className="mt-3 border-t border-subtle pt-3">
+                    <span className="text-[12px] font-semibold text-secondary">
                       Average: {weeklyAvg}/5
                     </span>
                   </div>
@@ -189,17 +184,17 @@ export function MoodTrackerPage() {
         </div>
 
         {/* Right column — full history */}
-        <div className="rounded-2xl border border-neutral-200/80 bg-white shadow-sm">
-          <div className="border-b border-neutral-100 px-5 py-4">
-            <h2 className="text-sm font-semibold text-neutral-700">Mood History</h2>
+        <div className="rounded-2xl border border-app bg-surface shadow-sm transition-colors">
+          <div className="border-b border-subtle px-5 py-4">
+            <h2 className="text-sm font-semibold text-primary">Mood History</h2>
           </div>
 
           {loading ? (
             <div className="flex justify-center py-16">
-              <div className="text-sm text-neutral-300">Loading...</div>
+              <span className="spinner" />
             </div>
           ) : logs.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-20 text-neutral-300">
+            <div className="flex flex-col items-center justify-center py-20 text-faint">
               <div className="mb-2 text-3xl">~</div>
               <div className="text-sm">No mood logs yet</div>
             </div>
@@ -207,22 +202,26 @@ export function MoodTrackerPage() {
             <ul>
               {logs.map((log, i) => {
                 const score = log.parsed?.score ?? 0;
-                const cls = MOOD_COLORS[score] ?? "bg-neutral-100 text-neutral-500 border-neutral-200";
+                const c = MOOD_COLORS[score] ?? { pill: "bg-[var(--surface-raised)] text-secondary border-app" };
                 return (
-                  <li key={log.id} className={`flex items-start gap-4 px-5 py-3.5 ${i > 0 ? "border-t border-neutral-100" : ""}`}>
-                    <span className={`mt-0.5 shrink-0 rounded-md border px-2 py-0.5 text-[12px] font-bold ${cls}`}>
+                  <li
+                    key={log.id}
+                    className={`animate-item flex items-start gap-4 px-5 py-3.5 ${i > 0 ? "border-t border-subtle" : ""}`}
+                    style={{ animationDelay: `${i * 15}ms` }}
+                  >
+                    <span className={`mt-0.5 shrink-0 rounded-md border px-2 py-0.5 text-[12px] font-bold ${c.pill}`}>
                       {score}/5
                     </span>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
-                        <span className="text-[12px] font-medium text-neutral-600">{log.parsed?.date}</span>
-                        <span className="text-[11px] text-neutral-400">{MOOD_LABELS[score]}</span>
+                        <span className="text-[12px] font-medium text-primary">{log.parsed?.date}</span>
+                        <span className="text-[11px] text-muted">{MOOD_LABELS[score]}</span>
                       </div>
                       {log.parsed?.notes && (
-                        <p className="mt-0.5 text-[12px] text-neutral-500">{log.parsed.notes}</p>
+                        <p className="mt-0.5 text-[12px] text-secondary">{log.parsed.notes}</p>
                       )}
                     </div>
-                    <div className="shrink-0">
+                    <div className="shrink-0 text-sm">
                       {"⭐".repeat(score)}
                     </div>
                   </li>

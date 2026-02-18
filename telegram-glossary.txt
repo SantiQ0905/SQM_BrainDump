@@ -8,6 +8,8 @@ BUCKET PREFIXES (route lines to specific buckets)
   l:  links
   j:  journal
   a:  archive
+  h:  habits
+  m:  mood
 
 TOKENS (inline markers parsed from text)
   [ ]       open task checkbox
@@ -41,14 +43,33 @@ REMINDERS
     - 5 minutes before
   Reminders are checked every 5 minutes and deduplicated (sent only once each).
 
+HABIT TRACKER
+  Log today's habits by number (uses sort_order position):
+    HT: 1-YES, 2-NO, 3-YES    explicit YES/NO per habit
+    HT: 1 3 5                  shorthand: listed numbers = YES, rest = NO
+  Logging is an upsert — re-sending today updates the existing entry.
+
+MOOD TRACKER
+  Log today's mood on a 1–5 scale:
+    MD: 4                      log mood score
+    MD: 4 felt productive      log score + optional note
+    Mood: 3 pretty tired       "Mood:" prefix works too
+  Scale: 1=Terrible  2=Bad  3=OK  4=Good  5=Great
+  Logging is an upsert — re-sending today updates the existing entry.
+
 COMMANDS
-  /start    welcome message + keyboard
-  /help     show this glossary
-  /brief    daily-style summary (inbox count, due/overdue tasks, top 5)
-  /last     last 10 telegram captures
-  /done     toggle most recent task from this chat (open <-> done)
-  /done N   toggle the Nth most recent task (1-based)
-  /del N    delete the Nth most recent item from this chat (1-based, required)
+  /start         welcome message + keyboard
+  /help          show this glossary
+  /brief         daily-style summary (inbox count, due/overdue tasks, top 5)
+  /last          last 10 telegram captures
+  /done          toggle most recent task from this chat (open <-> done)
+  /done N        toggle the Nth most recent task (1-based)
+  /del N         delete the Nth most recent item from this chat (1-based, required)
+  /habits        show today's habit check-in status
+  /listhabits    list all configured habits (active and inactive)
+  /addhabit X    add a new habit named X
+  /mood          show today's mood prompt (or confirm if already logged)
+  /streak        show habit streak, mood streak, 7-day mood avg, 30-day task completion rate
 
 MULTI-LINE SUPPORT
   Paste multiple lines in a single message — each line is parsed

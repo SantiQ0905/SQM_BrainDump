@@ -8,7 +8,6 @@ export function InboxPage() {
   const [items, setItems] = useState<LineItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
   const [draft, setDraft] = useState("");
   const [adding, setAdding] = useState(false);
 
@@ -54,32 +53,27 @@ export function InboxPage() {
   }
 
   return (
-    <div>
+    <div className="animate-page">
       <div className="mb-8 flex items-baseline justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-neutral-900">
-            Inbox
-          </h1>
-          <p className="mt-1 text-sm text-neutral-400">
-            Dump anything. Sort later.
-          </p>
+          <h1 className="text-2xl font-bold tracking-tight text-primary">Inbox</h1>
+          <p className="mt-1 text-sm text-muted">Dump anything. Sort later.</p>
         </div>
         {!loading && items.length > 0 && (
-          <span className="rounded-full bg-neutral-200/60 px-3 py-1 text-xs font-medium text-neutral-500">
+          <span className="rounded-full bg-[var(--surface-raised)] border border-app px-3 py-1 text-xs font-medium text-secondary">
             {items.length} {items.length === 1 ? "item" : "items"}
           </span>
         )}
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
+        {/* Input card */}
         <div className="xl:sticky xl:top-0 xl:self-start">
-          <div className="rounded-2xl border border-neutral-200/80 bg-white p-5 shadow-sm">
+          <div className="rounded-2xl border border-app bg-surface p-5 shadow-sm transition-colors">
             <textarea
-              className="w-full resize-none bg-transparent font-mono text-[13px] leading-relaxed text-neutral-800 placeholder:text-neutral-300 outline-none"
+              className="w-full resize-none bg-transparent font-mono text-[13px] leading-relaxed text-primary placeholder:text-faint outline-none"
               rows={6}
-              placeholder={`Buy coffee beans #coffee
-t: [ ] Pay Nu card ^15-02 !2 #finance
-n: Idea for the robot telemetry @ftc`}
+              placeholder={`Buy coffee beans #coffee\nt: [ ] Pay Nu card ^15-02 !2 #finance\nn: Idea for the robot telemetry @ftc`}
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
               onKeyDown={(e) => {
@@ -87,36 +81,35 @@ n: Idea for the robot telemetry @ftc`}
               }}
             />
 
-            <div className="mt-4 flex items-center justify-between border-t border-neutral-100 pt-4">
-              <span className="text-[11px] text-neutral-300">
-                Ctrl+Enter &middot; multi-line OK
-              </span>
+            <div className="mt-4 flex items-center justify-between border-t border-subtle pt-4">
+              <span className="text-[11px] text-faint">Ctrl+Enter · multi-line OK</span>
               <button
-                className="rounded-lg bg-neutral-900 px-4 py-2 text-xs font-semibold text-white shadow-sm transition-all hover:bg-neutral-800 active:scale-[0.97] disabled:opacity-40 disabled:shadow-none"
+                className="rounded-lg bg-[var(--accent)] px-4 py-2 text-xs font-semibold text-[var(--accent-fg)] shadow-sm transition-all hover:bg-[var(--accent-hover)] active:scale-[0.97] disabled:opacity-40"
                 disabled={adding || !draft.trim()}
                 onClick={addText}
               >
-                {adding ? "Adding..." : "Add"}
+                {adding ? "Adding…" : "Add"}
               </button>
             </div>
 
             {error && (
-              <div className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">
+              <div className="mt-3 rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-400">
                 {error}
               </div>
             )}
           </div>
         </div>
 
-        <div className="rounded-2xl border border-neutral-200/80 bg-white shadow-sm">
+        {/* List card */}
+        <div className="rounded-2xl border border-app bg-surface shadow-sm transition-colors">
           {loading && (
             <div className="flex items-center justify-center py-16">
-              <div className="text-sm text-neutral-300">Loading...</div>
+              <span className="spinner" />
             </div>
           )}
 
           {!loading && items.length === 0 && (
-            <div className="flex flex-col items-center justify-center py-20 text-neutral-300">
+            <div className="flex flex-col items-center justify-center py-20 text-faint">
               <div className="mb-2 text-3xl">~</div>
               <div className="text-sm">Nothing here yet</div>
             </div>
@@ -127,17 +120,20 @@ n: Idea for the robot telemetry @ftc`}
               {items.map((it, i) => (
                 <li
                   key={it.id}
-                  className={`group flex items-start gap-3 px-5 py-4 transition-colors hover:bg-stone-50 ${i > 0 ? "border-t border-neutral-100" : ""}`}
+                  className={`animate-item group flex items-start gap-3 px-5 py-4 transition-colors hover-surface ${
+                    i > 0 ? "border-t border-subtle" : ""
+                  }`}
+                  style={{ animationDelay: `${i * 20}ms` }}
                 >
                   <div className="min-w-0 flex-1">
-                    <div className="font-mono text-[13px] leading-relaxed text-neutral-800">
+                    <div className="font-mono text-[13px] leading-relaxed text-primary">
                       {it.raw}
                     </div>
                     <LineMetadata item={it} />
                   </div>
                   <button
                     onClick={() => deleteItem(it.id)}
-                    className="shrink-0 rounded p-1 text-neutral-300 opacity-0 transition-all hover:bg-red-50 hover:text-red-400 group-hover:opacity-100"
+                    className="shrink-0 rounded p-1 text-faint opacity-0 transition-all hover:bg-red-500/10 hover:text-red-400 group-hover:opacity-100"
                     title="Delete"
                   >
                     <svg className="h-3.5 w-3.5" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
@@ -158,31 +154,32 @@ function LineMetadata({ item }: { item: LineItem }) {
   const parts: { label: string; cls: string }[] = [];
 
   if (item.parsed?.priority) {
-    const cls = item.parsed.priority === 1
-      ? "bg-red-50 text-red-500"
-      : item.parsed.priority === 2
-        ? "bg-amber-50 text-amber-600"
-        : "bg-blue-50 text-blue-500";
+    const cls =
+      item.parsed.priority === 1
+        ? "bg-red-500/10 text-red-400"
+        : item.parsed.priority === 2
+        ? "bg-amber-500/10 text-amber-400"
+        : "bg-blue-500/10 text-blue-400";
     parts.push({ label: `!${item.parsed.priority}`, cls });
   }
 
   if (item.parsed?.due) {
-    parts.push({ label: `^${item.parsed.due}`, cls: "bg-violet-50 text-violet-500" });
+    parts.push({ label: `^${item.parsed.due}`, cls: "bg-violet-500/10 text-violet-400" });
   }
 
   if (item.parsed?.project) {
-    parts.push({ label: `@${item.parsed.project}`, cls: "bg-cyan-50 text-cyan-600" });
+    parts.push({ label: `@${item.parsed.project}`, cls: "bg-cyan-500/10 text-cyan-400" });
   }
 
   if (Array.isArray(item.parsed?.tags)) {
     for (const t of item.parsed.tags) {
-      parts.push({ label: `#${t}`, cls: "bg-neutral-100 text-neutral-500" });
+      parts.push({ label: `#${t}`, cls: "bg-[var(--surface-raised)] text-secondary" });
     }
   }
 
   return (
     <div className="mt-2 flex flex-wrap items-center gap-1.5">
-      <span className="text-[11px] text-neutral-300">
+      <span className="text-[11px] text-faint">
         {new Date(item.created_at).toLocaleDateString()}
       </span>
       {parts.map((p) => (

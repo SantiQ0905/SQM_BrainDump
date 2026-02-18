@@ -7,37 +7,31 @@ const META: Record<string, { title: string; subtitle: string; placeholder: strin
     title: "Inbox",
     subtitle: "Dump anything. Sort later.",
     noun: "item",
-    placeholder: `Buy coffee beans #coffee
-t: [ ] Pay Nu card ^15-02 !2 #finance
-n: Idea for the robot telemetry @ftc`,
+    placeholder: `Buy coffee beans #coffee\nt: [ ] Pay Nu card ^15-02 !2 #finance\nn: Idea for the robot telemetry @ftc`,
   },
   tasks: {
     title: "Tasks",
     subtitle: "Things to do. [ ] for checkboxes, !1 !2 !3 for priority.",
     noun: "task",
-    placeholder: `[ ] Buy groceries ^15-02 #errands
-[ ] Review PR for auth module @work !1`,
+    placeholder: `[ ] Buy groceries ^15-02 #errands\n[ ] Review PR for auth module @work !1`,
   },
   notes: {
     title: "Notes",
     subtitle: "Ideas, observations, quick thoughts.",
     noun: "note",
-    placeholder: `ECAM alerts could work for robot telemetry @ftc
-Read "Thinking in Systems" #reading`,
+    placeholder: `ECAM alerts could work for robot telemetry @ftc\nRead "Thinking in Systems" #reading`,
   },
   links: {
     title: "Bookmarks",
     subtitle: "Links worth saving. URLs are auto-extracted.",
     noun: "link",
-    placeholder: `https://linear.app/changelog #tools
-Great thread on system design https://x.com/... #engineering`,
+    placeholder: `https://linear.app/changelog #tools\nGreat thread on system design https://x.com/... #engineering`,
   },
   journal: {
     title: "Journal",
     subtitle: "Daily log. Stream of consciousness.",
     noun: "entry",
-    placeholder: `Good morning. Slept 7h. Energy is high.
-Struggled with the deploy pipeline, fixed by pinning node version.`,
+    placeholder: `Good morning. Slept 7h. Energy is high.\nStruggled with the deploy pipeline, fixed by pinning node version.`,
   },
   archive: {
     title: "Archive",
@@ -53,7 +47,6 @@ export function LinesPage({ bucket }: { bucket: string }) {
   const [items, setItems] = useState<LineItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
   const [draft, setDraft] = useState("");
   const [adding, setAdding] = useState(false);
 
@@ -101,16 +94,14 @@ export function LinesPage({ bucket }: { bucket: string }) {
   const plural = items.length === 1 ? meta.noun : `${meta.noun}s`;
 
   return (
-    <div>
+    <div className="animate-page">
       <div className="mb-8 flex items-baseline justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-neutral-900">
-            {meta.title}
-          </h1>
-          <p className="mt-1 text-sm text-neutral-400">{meta.subtitle}</p>
+          <h1 className="text-2xl font-bold tracking-tight text-primary">{meta.title}</h1>
+          <p className="mt-1 text-sm text-muted">{meta.subtitle}</p>
         </div>
         {!loading && items.length > 0 && (
-          <span className="rounded-full bg-neutral-200/60 px-3 py-1 text-xs font-medium text-neutral-500">
+          <span className="rounded-full bg-[var(--surface-raised)] border border-app px-3 py-1 text-xs font-medium text-secondary">
             {items.length} {plural}
           </span>
         )}
@@ -118,9 +109,9 @@ export function LinesPage({ bucket }: { bucket: string }) {
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
         <div className="xl:sticky xl:top-0 xl:self-start">
-          <div className="rounded-2xl border border-neutral-200/80 bg-white p-5 shadow-sm">
+          <div className="rounded-2xl border border-app bg-surface p-5 shadow-sm transition-colors">
             <textarea
-              className="w-full resize-none bg-transparent font-mono text-[13px] leading-relaxed text-neutral-800 placeholder:text-neutral-300 outline-none"
+              className="w-full resize-none bg-transparent font-mono text-[13px] leading-relaxed text-primary placeholder:text-faint outline-none"
               rows={6}
               placeholder={meta.placeholder}
               value={draft}
@@ -130,36 +121,34 @@ export function LinesPage({ bucket }: { bucket: string }) {
               }}
             />
 
-            <div className="mt-4 flex items-center justify-between border-t border-neutral-100 pt-4">
-              <span className="text-[11px] text-neutral-300">
-                Ctrl+Enter &middot; multi-line OK
-              </span>
+            <div className="mt-4 flex items-center justify-between border-t border-subtle pt-4">
+              <span className="text-[11px] text-faint">Ctrl+Enter · multi-line OK</span>
               <button
-                className="rounded-lg bg-neutral-900 px-4 py-2 text-xs font-semibold text-white shadow-sm transition-all hover:bg-neutral-800 active:scale-[0.97] disabled:opacity-40 disabled:shadow-none"
+                className="rounded-lg bg-[var(--accent)] px-4 py-2 text-xs font-semibold text-[var(--accent-fg)] shadow-sm transition-all hover:bg-[var(--accent-hover)] active:scale-[0.97] disabled:opacity-40"
                 disabled={adding || !draft.trim()}
                 onClick={addText}
               >
-                {adding ? "Adding..." : "Add"}
+                {adding ? "Adding…" : "Add"}
               </button>
             </div>
 
             {error && (
-              <div className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">
+              <div className="mt-3 rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-400">
                 {error}
               </div>
             )}
           </div>
         </div>
 
-        <div className="rounded-2xl border border-neutral-200/80 bg-white shadow-sm">
+        <div className="rounded-2xl border border-app bg-surface shadow-sm transition-colors">
           {loading && (
             <div className="flex items-center justify-center py-16">
-              <div className="text-sm text-neutral-300">Loading...</div>
+              <span className="spinner" />
             </div>
           )}
 
           {!loading && items.length === 0 && (
-            <div className="flex flex-col items-center justify-center py-20 text-neutral-300">
+            <div className="flex flex-col items-center justify-center py-20 text-faint">
               <div className="mb-2 text-3xl">~</div>
               <div className="text-sm">Nothing here yet</div>
             </div>
@@ -170,38 +159,39 @@ export function LinesPage({ bucket }: { bucket: string }) {
               {items.map((it, i) => (
                 <li
                   key={it.id}
-                  className={`group flex items-start gap-3 px-5 py-4 transition-colors hover:bg-stone-50 ${i > 0 ? "border-t border-neutral-100" : ""}`}
+                  className={`animate-item group flex items-start gap-3 px-5 py-4 transition-colors hover-surface ${
+                    i > 0 ? "border-t border-subtle" : ""
+                  }`}
+                  style={{ animationDelay: `${i * 20}ms` }}
                 >
                   <div className="min-w-0 flex-1">
-                    <div className="font-mono text-[13px] leading-relaxed text-neutral-800">
-                      {it.raw}
-                    </div>
+                    <div className="font-mono text-[13px] leading-relaxed text-primary">{it.raw}</div>
                     <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                      <span className="text-[11px] text-neutral-300">
+                      <span className="text-[11px] text-faint">
                         {new Date(it.created_at).toLocaleDateString()}
                       </span>
                       {it.parsed?.priority && (
                         <span className={`rounded-md px-1.5 py-0.5 font-mono text-[10px] font-medium ${
-                          it.parsed.priority === 1 ? "bg-red-50 text-red-500" :
-                          it.parsed.priority === 2 ? "bg-amber-50 text-amber-600" :
-                          "bg-blue-50 text-blue-500"
+                          it.parsed.priority === 1 ? "bg-red-500/10 text-red-400" :
+                          it.parsed.priority === 2 ? "bg-amber-500/10 text-amber-400" :
+                          "bg-blue-500/10 text-blue-400"
                         }`}>
                           !{it.parsed.priority}
                         </span>
                       )}
                       {it.parsed?.due && (
-                        <span className="rounded-md bg-violet-50 px-1.5 py-0.5 font-mono text-[10px] font-medium text-violet-500">
+                        <span className="rounded-md bg-violet-500/10 px-1.5 py-0.5 font-mono text-[10px] font-medium text-violet-400">
                           ^{it.parsed.due}
                         </span>
                       )}
                       {it.parsed?.project && (
-                        <span className="rounded-md bg-cyan-50 px-1.5 py-0.5 font-mono text-[10px] font-medium text-cyan-600">
+                        <span className="rounded-md bg-cyan-500/10 px-1.5 py-0.5 font-mono text-[10px] font-medium text-cyan-400">
                           @{it.parsed.project}
                         </span>
                       )}
                       {Array.isArray(it.parsed?.tags) &&
                         it.parsed.tags.map((t) => (
-                          <span key={t} className="rounded-md bg-neutral-100 px-1.5 py-0.5 font-mono text-[10px] font-medium text-neutral-500">
+                          <span key={t} className="rounded-md bg-[var(--surface-raised)] px-1.5 py-0.5 font-mono text-[10px] font-medium text-secondary">
                             #{t}
                           </span>
                         ))}
@@ -209,7 +199,7 @@ export function LinesPage({ bucket }: { bucket: string }) {
                   </div>
                   <button
                     onClick={() => deleteItem(it.id)}
-                    className="shrink-0 rounded p-1 text-neutral-300 opacity-0 transition-all hover:bg-red-50 hover:text-red-400 group-hover:opacity-100"
+                    className="shrink-0 rounded p-1 text-faint opacity-0 transition-all hover:bg-red-500/10 hover:text-red-400 group-hover:opacity-100"
                     title="Delete"
                   >
                     <svg className="h-3.5 w-3.5" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">

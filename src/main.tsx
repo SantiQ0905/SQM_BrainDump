@@ -2,6 +2,7 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import { createBrowserRouter, Navigate, RouterProvider } from "react-router-dom";
 import "./index.css";
+import { ThemeProvider } from "./app/ThemeContext";
 import { RequireAdminKey } from "./app/RequireAdminKey";
 import { AppShell } from "./app/AppShell";
 import { InboxPage } from "./features/inbox/InboxPage";
@@ -23,20 +24,22 @@ const router = createBrowserRouter([
       </RequireAdminKey>
     ),
     children: [
-      { path: "inbox", element: <InboxPage /> },
-      { path: "tasks", element: <TasksPage /> },
-      { path: "notes", element: <NotesPage /> },
+      { path: "inbox",     element: <InboxPage /> },
+      { path: "tasks",     element: <TasksPage /> },
+      { path: "notes",     element: <NotesPage /> },
       { path: "bookmarks", element: <BookmarksPage /> },
-      { path: "journal", element: <LinesPage bucket="journal" /> },
-      { path: "habits", element: <HabitTrackerPage /> },
-      { path: "mood", element: <MoodTrackerPage /> },
-      { path: "metrics", element: <MetricsPage /> },
+      { path: "journal",   element: <LinesPage bucket="journal" /> },
+      { path: "habits",    element: <HabitTrackerPage /> },
+      { path: "mood",      element: <MoodTrackerPage /> },
+      { path: "metrics",   element: <MetricsPage /> },
     ],
   },
 ]);
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <RouterProvider router={router} />
+    <ThemeProvider>
+      <RouterProvider router={router} />
+    </ThemeProvider>
   </React.StrictMode>
 );
