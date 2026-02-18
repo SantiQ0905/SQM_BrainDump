@@ -51,7 +51,7 @@ export default async function handler(req: any, res: any) {
       return res.end();
     }
 
-    const secret = req.headers["x-cron-secret"];
+    const secret = req.headers["x-cron-secret"] ?? req.headers["cron_secret"];
     if (!secret || secret !== getEnv("CRON_SECRET")) {
       return json(res, 401, { error: "Unauthorized cron" });
     }
