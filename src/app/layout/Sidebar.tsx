@@ -46,46 +46,46 @@ export function Sidebar() {
       )}
     >
       {/* ── Header ────────────────────────────────────────── */}
-      <div
-        className={clsx(
-          "overflow-hidden",
-          collapsed
-            ? "flex flex-col items-center px-0 py-5"
-            : "flex flex-col items-center px-4 pt-8 pb-6 text-center"
-        )}
-      >
+      <div className="overflow-hidden">
         {collapsed ? (
-          /* Collapsed: logo only, centered */
-          <img
-            src="/logo.jpg"
-            alt="Eliza Fontaine"
-            className="h-10 w-10 rounded-full object-cover ring-2 ring-[#c9a96e]/30 ring-offset-2 ring-offset-[#0d0d10]"
-          />
+          /* Collapsed: small logo centered */
+          <div className="flex justify-center py-5">
+            <img
+              src="/logo.jpg"
+              alt="Eliza Fontaine"
+              className="h-10 w-10 rounded-full object-cover object-top ring-2 ring-[#c9a96e]/30 ring-offset-2 ring-offset-[#0d0d10]"
+            />
+          </div>
         ) : (
-          /* Expanded: large centered logo + stacked wordmark */
+          /* Expanded: full-width hero banner */
           <>
-            {/* Ambient glow behind logo */}
             <div className="relative">
-              <div className="absolute inset-[-6px] rounded-full bg-[#c9a96e]/[0.07] blur-xl" />
+              {/* Portrait image — flush to all edges */}
               <img
                 src="/logo.jpg"
                 alt="Eliza Fontaine"
-                className="relative h-20 w-20 rounded-full object-cover ring-2 ring-[#c9a96e]/35 ring-offset-[3px] ring-offset-[#0d0d10]"
+                className="h-56 w-full object-cover object-top"
               />
+
+              {/* Gradient: transparent top → full sidebar-bg at bottom */}
+              <div className="absolute inset-0 bg-gradient-to-t from-[#0d0d10] via-[#0d0d10]/55 to-transparent" />
+
+              {/* Side vignettes for depth */}
+              <div className="absolute inset-0 bg-gradient-to-r from-[#0d0d10]/30 via-transparent to-[#0d0d10]/30" />
+
+              {/* Text overlay */}
+              <div className="absolute bottom-0 left-0 right-0 px-5 pb-5">
+                <p className="font-display text-[22px] font-semibold leading-tight tracking-wide text-white [text-shadow:0_2px_16px_rgba(0,0,0,0.9)]">
+                  Eliza Fontaine
+                </p>
+                <p className="mt-1.5 text-[9px] font-bold uppercase tracking-[0.3em] text-[#c9a96e]">
+                  Personal Assistant
+                </p>
+              </div>
             </div>
 
-            {/* Name */}
-            <div className="mt-4 font-display text-[20px] font-semibold leading-tight tracking-wide text-white">
-              Eliza Fontaine
-            </div>
-
-            {/* Tagline */}
-            <div className="mt-1.5 text-[9px] font-bold uppercase tracking-[0.28em] text-neutral-600">
-              Personal Assistant
-            </div>
-
-            {/* Decorative divider */}
-            <div className="mt-5 h-px w-full bg-gradient-to-r from-transparent via-[#c9a96e]/30 to-transparent" />
+            {/* Gold separator line */}
+            <div className="h-px bg-gradient-to-r from-transparent via-[#c9a96e]/40 to-transparent" />
           </>
         )}
       </div>
