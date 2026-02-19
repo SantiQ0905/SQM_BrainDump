@@ -48,8 +48,10 @@ export function Sidebar() {
       {/* ── Header ────────────────────────────────────────── */}
       <div
         className={clsx(
-          "overflow-hidden pt-6 pb-5",
-          collapsed ? "flex flex-col items-center px-0" : "px-4"
+          "overflow-hidden",
+          collapsed
+            ? "flex flex-col items-center px-0 py-5"
+            : "flex flex-col items-center px-4 pt-8 pb-6 text-center"
         )}
       >
         {collapsed ? (
@@ -57,27 +59,33 @@ export function Sidebar() {
           <img
             src="/logo.jpg"
             alt="Eliza Fontaine"
-            className="h-10 w-10 rounded-full object-cover ring-2 ring-[#c9a96e]/25"
+            className="h-10 w-10 rounded-full object-cover ring-2 ring-[#c9a96e]/30 ring-offset-2 ring-offset-[#0d0d10]"
           />
         ) : (
-          /* Expanded: logo + wordmark */
+          /* Expanded: large centered logo + stacked wordmark */
           <>
-            <div className="flex items-center gap-3">
+            {/* Ambient glow behind logo */}
+            <div className="relative">
+              <div className="absolute inset-[-6px] rounded-full bg-[#c9a96e]/[0.07] blur-xl" />
               <img
                 src="/logo.jpg"
                 alt="Eliza Fontaine"
-                className="h-12 w-12 shrink-0 rounded-full object-cover ring-2 ring-[#c9a96e]/25"
+                className="relative h-20 w-20 rounded-full object-cover ring-2 ring-[#c9a96e]/35 ring-offset-[3px] ring-offset-[#0d0d10]"
               />
-              <div className="min-w-0">
-                <div className="font-display text-[15px] font-semibold leading-tight tracking-wide text-white">
-                  Eliza Fontaine
-                </div>
-                <div className="mt-0.5 text-[9px] font-semibold uppercase tracking-[0.15em] text-neutral-600">
-                  Personal Assistant
-                </div>
-              </div>
             </div>
-            <div className="mt-4 h-px bg-gradient-to-r from-[#c9a96e]/35 via-[#c9a96e]/10 to-transparent" />
+
+            {/* Name */}
+            <div className="mt-4 font-display text-[20px] font-semibold leading-tight tracking-wide text-white">
+              Eliza Fontaine
+            </div>
+
+            {/* Tagline */}
+            <div className="mt-1.5 text-[9px] font-bold uppercase tracking-[0.28em] text-neutral-600">
+              Personal Assistant
+            </div>
+
+            {/* Decorative divider */}
+            <div className="mt-5 h-px w-full bg-gradient-to-r from-transparent via-[#c9a96e]/30 to-transparent" />
           </>
         )}
       </div>
