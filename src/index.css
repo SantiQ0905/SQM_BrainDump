@@ -157,3 +157,39 @@ input::placeholder {
 
   .hover-surface:hover { background-color: var(--surface-hover); }
 }
+
+/* ─── Touch devices: always show hover-only actions ──────────── */
+/* On mobile there's no hover; delete buttons must be tappable  */
+@media (hover: none) {
+  .group-hover\:opacity-100 {
+    opacity: 1;
+  }
+}
+
+/* ─── Input card focus glow ──────────────────────────────────── */
+.rounded-2xl:has(textarea:focus) {
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 10%, transparent);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+/* ─── Richer card depth ──────────────────────────────────────── */
+/* Light mode: warm lifted shadow */
+.rounded-2xl.bg-surface {
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.04),
+    0 4px 16px rgba(0, 0, 0, 0.05);
+}
+/* Dark mode: deeper, darker shadow */
+.dark .rounded-2xl.bg-surface {
+  box-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.4),
+    0 6px 24px rgba(0, 0, 0, 0.3);
+}
+
+/* ─── Page header typography lift ────────────────────────────── */
+/* Give every page's main h1 the display serif for elegance */
+.animate-page h1 {
+  font-family: 'Playfair Display', Georgia, 'Times New Roman', serif;
+  letter-spacing: -0.01em;
+}

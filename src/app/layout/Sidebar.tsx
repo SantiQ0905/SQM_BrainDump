@@ -24,7 +24,13 @@ function CollapseTooltip({ label }: { label: string }) {
   );
 }
 
-export function Sidebar() {
+export function Sidebar({
+  onNavigate,
+  forceExpanded = false,
+}: {
+  onNavigate?: () => void;
+  forceExpanded?: boolean;
+}) {
   const { theme, toggle } = useTheme();
 
   const [collapsed, setCollapsed] = useState(
@@ -37,70 +43,78 @@ export function Sidebar() {
     localStorage.setItem("ef.sidebar", next ? "true" : "false");
   }
 
+  // On mobile (forceExpanded), always show expanded view
+  const isExpanded = forceExpanded || !collapsed;
+
   return (
     <aside
       className={clsx(
-        "flex shrink-0 flex-col border-r border-[#1e1e23] bg-[#0d0d10]",
+        "flex h-full shrink-0 flex-col border-r border-[#1e1e23] bg-[#0d0d10]",
         "transition-[width] duration-300 ease-in-out",
-        collapsed ? "w-[68px]" : "w-60"
+        isExpanded ? "w-60" : "w-[68px]"
       )}
     >
       {/* ── Header ────────────────────────────────────────── */}
       <div className="overflow-hidden">
-        {collapsed ? (
-          /* Collapsed: small logo centered */
+        {!isExpanded ? (
+          /* Collapsed: small logo centered with glow */
           <div className="flex justify-center py-5">
             <img
               src="/logo.jpg"
               alt="Eliza Fontaine"
-              className="h-10 w-10 rounded-full object-cover object-top ring-2 ring-[#c9a96e]/30 ring-offset-2 ring-offset-[#0d0d10]"
+              className="h-11 w-11 rounded-full object-cover object-top ring-2 ring-[#c9a96e]/40 ring-offset-2 ring-offset-[#0d0d10]"
+              style={{ boxShadow: "0 0 18px rgba(201,169,110,0.25)" }}
             />
           </div>
         ) : (
-          /* Expanded: full-width hero banner */
+          /* Expanded: cinematic hero banner */
           <>
             <div className="relative">
-              {/* Portrait image — flush to all edges */}
+              {/* Portrait — taller for more presence */}
               <img
                 src="/logo.jpg"
                 alt="Eliza Fontaine"
-                className="h-56 w-full object-cover object-top"
+                className="h-64 w-full object-cover object-top"
               />
 
-              {/* Gradient: transparent top → full sidebar-bg at bottom */}
-              <div className="absolute inset-0 bg-gradient-to-t from-[#0d0d10] via-[#0d0d10]/55 to-transparent" />
+              {/* Bottom-to-top fade */}
+              <div className="absolute inset-0 bg-gradient-to-t from-[#0d0d10] via-[#0d0d10]/60 to-transparent" />
 
               {/* Side vignettes for depth */}
-              <div className="absolute inset-0 bg-gradient-to-r from-[#0d0d10]/30 via-transparent to-[#0d0d10]/30" />
+              <div className="absolute inset-0 bg-gradient-to-r from-[#0d0d10]/40 via-transparent to-[#0d0d10]/40" />
 
               {/* Text overlay */}
               <div className="absolute bottom-0 left-0 right-0 px-5 pb-5">
-                <p className="font-display text-[22px] font-semibold leading-tight tracking-wide text-white [text-shadow:0_2px_16px_rgba(0,0,0,0.9)]">
+                <p
+                  className="font-display text-[23px] font-semibold leading-tight tracking-wide text-white"
+                  style={{ textShadow: "0 2px 24px rgba(0,0,0,0.95)" }}
+                >
                   Eliza Fontaine
                 </p>
-                <p className="mt-1.5 text-[9px] font-bold uppercase tracking-[0.3em] text-[#c9a96e]">
+                <p className="mt-1.5 text-[9px] font-bold uppercase tracking-[0.32em] text-[#c9a96e]">
                   Personal Assistant
                 </p>
               </div>
             </div>
 
-            {/* Gold separator line */}
-            <div className="h-px bg-gradient-to-r from-transparent via-[#c9a96e]/40 to-transparent" />
+            {/* Gold separator */}
+            <div className="h-px bg-gradient-to-r from-transparent via-[#c9a96e]/50 to-transparent" />
           </>
         )}
       </div>
 
       {/* ── Nav ───────────────────────────────────────────── */}
-      <nav className={clsx("flex-1 space-y-0.5", collapsed ? "px-2" : "px-3")}>
+      <nav className={clsx("flex-1 space-y-0.5 py-2", !isExpanded ? "px-2" : "px-3")}>
         {NAV_ITEMS.map(({ to, label, icon }) => (
           <NavLink
             key={to}
             to={to}
-            title={collapsed ? label : undefined}
+            onClick={onNavigate}
+            title={!isExpanded ? label : undefined}
             className={({ isActive }) =>
               clsx(
                 "group relative flex items-center rounded-lg transition-all duration-150",
-                collapsed ? "justify-center py-2.5" : "gap-3 px-3 py-2.5",
+                !isExpanded ? "justify-center py-2.5" : "gap-3 px-3 py-2.5",
                 isActive
                   ? "bg-[#c9a96e]/12 text-[#c9a96e]"
                   : "text-neutral-500 hover:bg-white/[0.05] hover:text-neutral-300"
@@ -120,11 +134,11 @@ export function Sidebar() {
                   {icon}
                 </span>
 
-                {!collapsed && (
+                {isExpanded && (
                   <span className="text-[13px] font-medium">{label}</span>
                 )}
 
-                {collapsed && <CollapseTooltip label={label} />}
+                {!isExpanded && <CollapseTooltip label={label} />}
               </>
             )}
           </NavLink>
@@ -136,50 +150,52 @@ export function Sidebar() {
         {/* Theme toggle */}
         <button
           onClick={toggle}
-          title={collapsed ? (theme === "dark" ? "Light mode" : "Dark mode") : undefined}
+          title={!isExpanded ? (theme === "dark" ? "Light mode" : "Dark mode") : undefined}
           className={clsx(
             "group relative flex w-full items-center rounded-lg text-[12px] font-medium text-neutral-600 transition-colors hover:bg-white/[0.05] hover:text-neutral-400",
-            collapsed ? "justify-center py-2" : "gap-3 px-3 py-2"
+            !isExpanded ? "justify-center py-2" : "gap-3 px-3 py-2"
           )}
         >
           <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-white/[0.05] text-[11px] text-neutral-600">
             {theme === "dark" ? "☀" : "◑"}
           </span>
-          {!collapsed && (theme === "dark" ? "Light mode" : "Dark mode")}
-          {collapsed && <CollapseTooltip label={theme === "dark" ? "Light mode" : "Dark mode"} />}
+          {isExpanded && (theme === "dark" ? "Light mode" : "Dark mode")}
+          {!isExpanded && <CollapseTooltip label={theme === "dark" ? "Light mode" : "Dark mode"} />}
         </button>
 
         {/* Sign out */}
         <button
           onClick={() => { clearAdminKey(); location.reload(); }}
-          title={collapsed ? "Sign out" : undefined}
+          title={!isExpanded ? "Sign out" : undefined}
           className={clsx(
             "group relative flex w-full items-center rounded-lg text-[12px] font-medium text-neutral-600 transition-colors hover:bg-white/[0.05] hover:text-neutral-400",
-            collapsed ? "justify-center py-2" : "gap-3 px-3 py-2"
+            !isExpanded ? "justify-center py-2" : "gap-3 px-3 py-2"
           )}
         >
           <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-white/[0.05] text-[11px] text-neutral-600">
             ↪
           </span>
-          {!collapsed && "Sign out"}
-          {collapsed && <CollapseTooltip label="Sign out" />}
+          {isExpanded && "Sign out"}
+          {!isExpanded && <CollapseTooltip label="Sign out" />}
         </button>
 
-        {/* Collapse toggle */}
-        <button
-          onClick={toggleCollapsed}
-          title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-          className={clsx(
-            "group relative flex w-full items-center rounded-lg text-[12px] font-medium text-neutral-700 transition-colors hover:bg-white/[0.05] hover:text-neutral-500",
-            collapsed ? "justify-center py-2" : "gap-3 px-3 py-2"
-          )}
-        >
-          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-white/[0.05] text-[11px]">
-            {collapsed ? "›" : "‹"}
-          </span>
-          {!collapsed && "Collapse"}
-          {collapsed && <CollapseTooltip label="Expand sidebar" />}
-        </button>
+        {/* Collapse toggle — hidden when forced expanded (mobile drawer) */}
+        {!forceExpanded && (
+          <button
+            onClick={toggleCollapsed}
+            title={!isExpanded ? "Expand sidebar" : "Collapse sidebar"}
+            className={clsx(
+              "group relative flex w-full items-center rounded-lg text-[12px] font-medium text-neutral-700 transition-colors hover:bg-white/[0.05] hover:text-neutral-500",
+              !isExpanded ? "justify-center py-2" : "gap-3 px-3 py-2"
+            )}
+          >
+            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-white/[0.05] text-[11px]">
+              {!isExpanded ? "›" : "‹"}
+            </span>
+            {isExpanded && "Collapse"}
+            {!isExpanded && <CollapseTooltip label="Expand sidebar" />}
+          </button>
+        )}
       </div>
     </aside>
   );
