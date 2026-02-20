@@ -81,7 +81,7 @@ function parseLine(input: string, defaultBucket: Bucket = "inbox") {
     project: projects.length ? projects[0] : null,
     projects,
     due,
-    due_time: due ? (due_time ?? "09:00") : null,
+    due_time: due ? due_time : null,
     priority: priority ? Number(priority) : null,
     done,
     urls,
