@@ -30,12 +30,12 @@ function TopBar({ onMenuToggle }: { onMenuToggle: () => void }) {
 
       {/* Mobile: prominent logo + name */}
       <div className="flex flex-1 items-center gap-3 md:hidden">
-          <img
-            src="/logo.jpg"
-            alt="Logo"
-            className="rounded-full w-16 h-16 ring-4 ring-cyan-400 ring-offset-4 shadow-2xl border-4 border-white"
-            style={{ boxShadow: '0 0 32px 8px #38bdf8, 0 0 64px 16px #fff', filter: 'brightness(1.2) contrast(1.2)' }}
-          />
+        <img
+          src="/logo.jpg"
+          alt="Eliza Fontaine"
+          className="h-8 w-8 rounded-full object-cover object-top ring-2 ring-[#c9a96e]/50"
+          style={{ boxShadow: "0 0 14px rgba(201,169,110,0.25)" }}
+        />
         <span className="font-display text-[16px] font-semibold tracking-wide text-primary">
           Eliza Fontaine
         </span>
