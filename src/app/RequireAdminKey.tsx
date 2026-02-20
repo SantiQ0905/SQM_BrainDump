@@ -25,12 +25,12 @@ export function RequireAdminKey({ children }: { children: React.ReactNode }) {
         <div className="animate-page relative w-full max-w-sm px-6">
           {/* Portrait */}
           <div className="mb-7 flex justify-center">
-            <img
-              src="/logo.jpg"
-              alt="Eliza Fontaine"
-              className="h-32 w-32 rounded-full object-cover object-top ring-2 ring-[#c9a96e]/50 ring-offset-[6px] ring-offset-[#0d0d10]"
-              style={{ boxShadow: "0 0 0 1px rgba(201,169,110,0.15), 0 0 60px rgba(201,169,110,0.28), 0 0 120px rgba(201,169,110,0.10)" }}
-            />
+              <img
+                src="/logo.jpg"
+                alt="Logo"
+                className="rounded-full w-32 h-32 ring-8 ring-cyan-400 ring-offset-8 shadow-2xl border-4 border-white"
+                style={{ boxShadow: '0 0 64px 16px #38bdf8, 0 0 128px 32px #fff', filter: 'brightness(1.2) contrast(1.2)' }}
+              />
           </div>
 
           {/* Wordmark */}
