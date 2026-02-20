@@ -16,25 +16,36 @@ export function RequireAdminKey({ children }: { children: React.ReactNode }) {
   if (!saved) {
     return (
       <div className="flex h-screen items-center justify-center bg-[#0d0d10]">
-        {/* Ambient glow */}
+        {/* Ambient glow — dual layer */}
         <div className="pointer-events-none absolute inset-0 overflow-hidden">
-          <div className="absolute left-1/2 top-1/2 h-80 w-80 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#c9a96e]/[0.04] blur-3xl" />
+          <div className="absolute left-1/2 top-1/3 h-[600px] w-[600px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#c9a96e]/[0.07] blur-[140px]" />
+          <div className="absolute left-1/2 bottom-0 h-64 w-96 -translate-x-1/2 rounded-full bg-[#c9a96e]/[0.04] blur-[80px]" />
         </div>
 
         <div className="animate-page relative w-full max-w-sm px-6">
+          {/* Portrait */}
+          <div className="mb-7 flex justify-center">
+            <img
+              src="/logo.jpg"
+              alt="Eliza Fontaine"
+              className="h-32 w-32 rounded-full object-cover object-top ring-2 ring-[#c9a96e]/50 ring-offset-[6px] ring-offset-[#0d0d10]"
+              style={{ boxShadow: "0 0 0 1px rgba(201,169,110,0.15), 0 0 60px rgba(201,169,110,0.28), 0 0 120px rgba(201,169,110,0.10)" }}
+            />
+          </div>
+
           {/* Wordmark */}
-          <div className="mb-10 text-center">
-            <div className="font-display text-[26px] font-semibold tracking-wide text-white">
+          <div className="mb-8 text-center">
+            <div className="font-display text-[34px] font-semibold tracking-wide text-white">
               Eliza Fontaine
             </div>
-            <div className="mt-2 text-[9px] font-semibold tracking-[0.22em] text-neutral-600 uppercase">
+            <div className="mt-2 text-[9px] font-bold tracking-[0.30em] text-[#c9a96e] uppercase">
               Personal Assistant
             </div>
-            <div className="mx-auto mt-5 h-px w-16 bg-gradient-to-r from-transparent via-[#c9a96e]/40 to-transparent" />
+            <div className="mx-auto mt-5 h-px w-24 bg-gradient-to-r from-transparent via-[#c9a96e]/70 to-transparent" />
           </div>
 
           {/* Card */}
-          <div className="rounded-2xl border border-[#2a2a33] bg-[#161619] p-6 shadow-2xl shadow-black/40">
+          <div className="rounded-2xl border border-[#2a2a33] bg-[#161619] p-6 shadow-2xl shadow-black/50">
             <div className="text-sm font-semibold text-neutral-200">Access Key</div>
             <p className="mt-1 text-[12px] text-[#5c5b6d]">
               No accounts — just paste your key.

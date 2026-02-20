@@ -57,48 +57,50 @@ export function Sidebar({
       {/* ── Header ────────────────────────────────────────── */}
       <div className="overflow-hidden">
         {!isExpanded ? (
-          /* Collapsed: small logo centered with glow */
-          <div className="flex justify-center py-5">
+          /* Collapsed: bold logo with strong glow */
+          <div className="flex justify-center py-4">
             <img
               src="/logo.jpg"
               alt="Eliza Fontaine"
-              className="h-11 w-11 rounded-full object-cover object-top ring-2 ring-[#c9a96e]/40 ring-offset-2 ring-offset-[#0d0d10]"
-              style={{ boxShadow: "0 0 18px rgba(201,169,110,0.25)" }}
+              className="h-14 w-14 rounded-full object-cover object-top ring-2 ring-[#c9a96e]/60 ring-offset-[3px] ring-offset-[#0d0d10]"
+              style={{ boxShadow: "0 0 0 1px rgba(201,169,110,0.12), 0 0 24px rgba(201,169,110,0.35)" }}
             />
           </div>
         ) : (
           /* Expanded: cinematic hero banner */
           <>
             <div className="relative">
-              {/* Portrait — taller for more presence */}
+              {/* Portrait — tall for strong presence */}
               <img
                 src="/logo.jpg"
                 alt="Eliza Fontaine"
-                className="h-64 w-full object-cover object-top"
+                className="h-72 w-full object-cover object-top"
               />
 
               {/* Bottom-to-top fade */}
-              <div className="absolute inset-0 bg-gradient-to-t from-[#0d0d10] via-[#0d0d10]/60 to-transparent" />
+              <div className="absolute inset-0 bg-gradient-to-t from-[#0d0d10] via-[#0d0d10]/50 to-transparent" />
 
               {/* Side vignettes for depth */}
-              <div className="absolute inset-0 bg-gradient-to-r from-[#0d0d10]/40 via-transparent to-[#0d0d10]/40" />
+              <div className="absolute inset-0 bg-gradient-to-r from-[#0d0d10]/30 via-transparent to-[#0d0d10]/30" />
 
               {/* Text overlay */}
               <div className="absolute bottom-0 left-0 right-0 px-5 pb-5">
                 <p
-                  className="font-display text-[23px] font-semibold leading-tight tracking-wide text-white"
-                  style={{ textShadow: "0 2px 24px rgba(0,0,0,0.95)" }}
+                  className="font-display text-[26px] font-semibold leading-tight tracking-wide text-white"
+                  style={{ textShadow: "0 2px 32px rgba(0,0,0,0.98)" }}
                 >
                   Eliza Fontaine
                 </p>
-                <p className="mt-1.5 text-[9px] font-bold uppercase tracking-[0.32em] text-[#c9a96e]">
+                <p className="mt-1.5 text-[9px] font-bold uppercase tracking-[0.34em] text-[#c9a96e]"
+                  style={{ textShadow: "0 0 12px rgba(201,169,110,0.5)" }}
+                >
                   Personal Assistant
                 </p>
               </div>
             </div>
 
-            {/* Gold separator */}
-            <div className="h-px bg-gradient-to-r from-transparent via-[#c9a96e]/50 to-transparent" />
+            {/* Gold separator — brighter */}
+            <div className="h-px bg-gradient-to-r from-transparent via-[#c9a96e]/70 to-transparent" />
           </>
         )}
       </div>
@@ -116,8 +118,8 @@ export function Sidebar({
                 "group relative flex items-center rounded-lg transition-all duration-150",
                 !isExpanded ? "justify-center py-2.5" : "gap-3 px-3 py-2.5",
                 isActive
-                  ? "bg-[#c9a96e]/12 text-[#c9a96e]"
-                  : "text-neutral-500 hover:bg-white/[0.05] hover:text-neutral-300"
+                  ? "bg-[#c9a96e]/15 text-[#c9a96e]"
+                  : "text-neutral-500 hover:bg-white/[0.06] hover:text-neutral-200"
               )
             }
           >
@@ -125,17 +127,17 @@ export function Sidebar({
               <>
                 <span
                   className={clsx(
-                    "flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-[11px] font-semibold transition-colors",
+                    "flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-[12px] font-bold transition-colors",
                     isActive
-                      ? "bg-[#c9a96e]/20 text-[#c9a96e]"
-                      : "bg-white/[0.05] text-neutral-600"
+                      ? "bg-[#c9a96e]/25 text-[#c9a96e]"
+                      : "bg-white/[0.06] text-neutral-500"
                   )}
                 >
                   {icon}
                 </span>
 
                 {isExpanded && (
-                  <span className="text-[13px] font-medium">{label}</span>
+                  <span className="text-[13.5px] font-semibold">{label}</span>
                 )}
 
                 {!isExpanded && <CollapseTooltip label={label} />}

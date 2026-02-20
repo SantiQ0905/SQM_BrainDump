@@ -218,7 +218,7 @@ function smartKeyboard() {
       [{ text: "t:" }, { text: "n:" }, { text: "l:" }, { text: "j:" }, { text: "i:" }],
       [{ text: "[ ]" }, { text: "[x]" }, { text: "!1" }, { text: "!2" }, { text: "!3" }],
       [{ text: "^today" }, { text: "^tomorrow" }, { text: "#tag" }, { text: "@project" }],
-      [{ text: "/brief" }, { text: "/last" }, { text: "/done" }, { text: "/del" }, { text: "/help" }],
+      [{ text: "/brief" }, { text: "/projects" }, { text: "/done" }, { text: "/del" }, { text: "/help" }],
     ],
     resize_keyboard: true,
     one_time_keyboard: false,
@@ -368,15 +368,18 @@ async function handleCommand(chatId: string | number, text: string, supabase: an
       "MD: 4  (log today's mood, scale 1-5)",
       "",
       "Commands:",
-      "/brief       daily summary",
-      "/last        last 10 captures",
-      "/done [N]    toggle task done",
-      "/del N       delete item",
-      "/habits      show today's habit list",
-      "/listhabits  list all configured habits",
-      "/addhabit X  add a new habit",
-      "/mood        show mood prompt",
-      "/streak      show streaks & stats",
+      "/brief            full summary",
+      "/brief @project   filter by project",
+      "/brief #tag       filter by tag",
+      "/projects         list all projects",
+      "/last             last 10 captures",
+      "/done [N]         toggle task done",
+      "/del N            delete item",
+      "/habits           show today's habit list",
+      "/listhabits       list all configured habits",
+      "/addhabit X       add a new habit",
+      "/mood             show mood prompt",
+      "/streak           show streaks & stats",
       "",
       "Tip: paste multiple lines — I'll split them.",
     ].join("\n");
@@ -386,22 +389,76 @@ async function handleCommand(chatId: string | number, text: string, supabase: an
   }
 
   if (cmd === "/brief") {
-    // generate a brief immediately (same logic as cron, but only to this chat)
+    const args = text.trim().slice("/brief".length).trim();
+    const projectFilter = args.match(/@([a-zA-Z0-9_-]+)/)?.[1]?.toLowerCase() ?? null;
+    const tagFilter = args.match(/#([a-zA-Z0-9_-]+)/)?.[1]?.toLowerCase() ?? null;
+
     const today = ymdInTZ(new Date(), TZ);
 
-    const { data: taskRows } = await supabase
+    // Build query — apply JSONB filter if needed
+    let taskQuery = supabase
       .from("lines")
       .select("raw, parsed, created_at")
       .eq("bucket", "tasks")
       .order("created_at", { ascending: false })
       .limit(2000);
 
+    if (projectFilter) {
+      taskQuery = taskQuery.filter("parsed->>project", "eq", projectFilter);
+    } else if (tagFilter) {
+      taskQuery = taskQuery.filter("parsed->tags", "cs", `["${tagFilter}"]`);
+    }
+
+    const { data: taskRows } = await taskQuery;
+    const openTasks = (taskRows ?? []).filter((t: any) => t?.parsed?.done !== true);
+
+    // ── Filtered view ──────────────────────────────────────────────
+    if (projectFilter || tagFilter) {
+      const filterLabel = projectFilter ? `@${projectFilter}` : `#${tagFilter}`;
+      const dueToday = openTasks.filter((t: any) => t?.parsed?.due === today);
+      const overdue = openTasks.filter((t: any) => {
+        const due = t?.parsed?.due;
+        return typeof due === "string" && due < today;
+      });
+
+      const sorted = openTasks.slice().sort((a: any, b: any) => {
+        const pa = a?.parsed?.priority ?? 99;
+        const pb = b?.parsed?.priority ?? 99;
+        if (pa !== pb) return pa - pb;
+        const da = a?.parsed?.due ?? "9999-12-31";
+        const db = b?.parsed?.due ?? "9999-12-31";
+        return da.localeCompare(db);
+      });
+
+      const out: string[] = [];
+      out.push(`Tasks ${filterLabel} (${today})`);
+      out.push(`Open: ${openTasks.length} • Due today: ${dueToday.length} • Overdue: ${overdue.length}`);
+
+      if (sorted.length === 0) {
+        out.push("\nNo open tasks.");
+      } else {
+        out.push("");
+        for (const t of sorted.slice(0, 20)) {
+          const due = t?.parsed?.due ? ` ^${t.parsed.due}` : "";
+          const pr = t?.parsed?.priority ? ` !${t.parsed.priority}` : "";
+          const overdueMark = t?.parsed?.due && t.parsed.due < today ? " ⚠" : "";
+          out.push(`• ${t.raw}${due}${pr}${overdueMark}`);
+        }
+        if (sorted.length > 20) {
+          out.push(`\n… and ${sorted.length - 20} more`);
+        }
+      }
+
+      await tgSendMessage(chatId, out.join("\n"), { reply_markup: smartKeyboard() });
+      return true;
+    }
+
+    // ── Default full brief ─────────────────────────────────────────
     const { data: inboxRows } = await supabase
       .from("lines")
       .select("id")
       .eq("bucket", "inbox");
 
-    const openTasks = (taskRows ?? []).filter((t: any) => t?.parsed?.done !== true);
     const dueToday = openTasks.filter((t: any) => t?.parsed?.due === today);
     const overdue = openTasks.filter((t: any) => {
       const due = t?.parsed?.due;
@@ -435,6 +492,45 @@ async function handleCommand(chatId: string | number, text: string, supabase: an
         out.push(`- ${t.raw}${due}${pr}`);
       }
     }
+
+    await tgSendMessage(chatId, out.join("\n"), { reply_markup: smartKeyboard() });
+    return true;
+  }
+
+  if (cmd === "/projects") {
+    const { data: taskRows } = await supabase
+      .from("lines")
+      .select("parsed")
+      .eq("bucket", "tasks")
+      .not("parsed->>project", "is", null)
+      .limit(2000);
+
+    const projectCounts: Record<string, { open: number; done: number }> = {};
+    for (const row of taskRows ?? []) {
+      const p = row.parsed?.project;
+      if (!p) continue;
+      if (!projectCounts[p]) projectCounts[p] = { open: 0, done: 0 };
+      if (row.parsed?.done === true) {
+        projectCounts[p].done++;
+      } else {
+        projectCounts[p].open++;
+      }
+    }
+
+    const projects = Object.entries(projectCounts).sort((a, b) => b[1].open - a[1].open);
+
+    if (!projects.length) {
+      await tgSendMessage(chatId, "No projects found. Tag tasks with @projectname to organize them.", { reply_markup: smartKeyboard() });
+      return true;
+    }
+
+    const out: string[] = ["Projects (open tasks):"];
+    for (const [name, counts] of projects) {
+      const bar = counts.open > 0 ? `${counts.open} open` : "all done";
+      const doneStr = counts.done > 0 ? ` • ${counts.done} done` : "";
+      out.push(`@${name}: ${bar}${doneStr}`);
+    }
+    out.push("\nTip: /brief @projectname to filter");
 
     await tgSendMessage(chatId, out.join("\n"), { reply_markup: smartKeyboard() });
     return true;

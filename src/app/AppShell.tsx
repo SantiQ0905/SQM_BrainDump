@@ -14,7 +14,9 @@ function TopBar({ onMenuToggle }: { onMenuToggle: () => void }) {
   );
 
   return (
-    <header className="shrink-0 flex items-center border-b border-app bg-surface/60 px-4 sm:px-6 lg:px-10 py-3 backdrop-blur-sm">
+    <header className="shrink-0 flex items-center border-b border-app bg-surface/60 px-4 sm:px-6 lg:px-8 py-3 backdrop-blur-sm"
+      style={{ borderBottom: "1px solid var(--border)" }}
+    >
       {/* Hamburger — mobile only */}
       <button
         onClick={onMenuToggle}
@@ -31,19 +33,33 @@ function TopBar({ onMenuToggle }: { onMenuToggle: () => void }) {
         <img
           src="/logo.jpg"
           alt="Eliza Fontaine"
-          className="h-7 w-7 rounded-full object-cover object-top ring-1 ring-[#c9a96e]/50"
+          className="h-8 w-8 rounded-full object-cover object-top ring-2 ring-[#c9a96e]/50"
+          style={{ boxShadow: "0 0 14px rgba(201,169,110,0.25)" }}
         />
-        <span className="font-display italic text-[15px] font-semibold tracking-wide text-primary">
+        <span className="font-display text-[16px] font-semibold tracking-wide text-primary">
           Eliza Fontaine
         </span>
       </div>
 
-      {/* Desktop: date + name on right */}
-      <div className="hidden md:flex flex-1 items-center justify-end gap-4">
-        <span className="font-display italic text-[13px] font-medium tracking-wide text-muted">
-          Eliza Fontaine
-        </span>
-        <span className="h-3 w-px bg-[var(--border)]" />
+      {/* Desktop: logo + bold name LEFT — date RIGHT */}
+      <div className="hidden md:flex flex-1 items-center gap-3">
+        <img
+          src="/logo.jpg"
+          alt="Eliza Fontaine"
+          className="h-9 w-9 rounded-full object-cover object-top ring-2 ring-[#c9a96e]/50 ring-offset-2 ring-offset-transparent"
+          style={{ boxShadow: "0 0 16px rgba(201,169,110,0.22)" }}
+        />
+        <div className="flex flex-col leading-none">
+          <span className="font-display text-[17px] font-semibold tracking-wide text-primary">
+            Eliza Fontaine
+          </span>
+          <span className="mt-0.5 text-[8.5px] font-bold tracking-[0.26em] text-accent uppercase">
+            Personal Assistant
+          </span>
+        </div>
+      </div>
+
+      <div className="hidden md:flex items-center gap-3">
         <span className="text-[11px] text-faint">{date}</span>
       </div>
     </header>
