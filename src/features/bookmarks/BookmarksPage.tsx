@@ -131,8 +131,8 @@ export function BookmarksPage() {
                   </div>
                   <button
                     onClick={() => deleteItem(it.id)}
-                    className="shrink-0 rounded p-1 text-faint opacity-0 transition-all hover:bg-red-500/10 hover:text-red-400 group-hover:opacity-100"
-                    title="Delete"
+                    className="shrink-0 rounded p-1.5 text-faint transition-all hover:bg-red-500/10 hover:text-red-400"
+                    title="Delete bookmark"
                   >
                     <svg className="h-3.5 w-3.5" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
                       <path d="M3 3l8 8M11 3l-8 8" />

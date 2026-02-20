@@ -199,7 +199,7 @@ export function LinesPage({ bucket }: { bucket: string }) {
                   </div>
                   <button
                     onClick={() => deleteItem(it.id)}
-                    className="shrink-0 rounded p-1 text-faint opacity-0 transition-all hover:bg-red-500/10 hover:text-red-400 group-hover:opacity-100"
+                    className="shrink-0 rounded p-1.5 text-faint transition-all hover:bg-red-500/10 hover:text-red-400"
                     title="Delete"
                   >
                     <svg className="h-3.5 w-3.5" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">

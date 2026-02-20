@@ -70,20 +70,25 @@ async function getChatIds(supabase: any): Promise<string[]> {
 }
 
 // ── Overdue nudge ──────────────────────────────────────────────────────────
+// slot=1 → ~1 PM (window 11–15)  — midday check
+// slot=2 → ~5 PM (window 16–19)  — end-of-day push
 async function handleOverdue(req: any, res: any, supabase: any) {
   const localHour = getLocalHour(TZ);
-  if (localHour < 11 || localHour > 15) {
-    return json(res, 200, { ok: true, skipped: true, reason: `hour=${localHour}, outside nudge window` });
+  const slot = (req.query?.slot as string) === "2" ? "2" : "1";
+
+  const window = slot === "2" ? { min: 16, max: 19 } : { min: 11, max: 15 };
+  if (localHour < window.min || localHour > window.max) {
+    return json(res, 200, { ok: true, skipped: true, reason: `hour=${localHour}, outside slot-${slot} window` });
   }
 
   const today = ymdInTZ(new Date(), TZ);
-  const nudgeType = `overdue_nudge_${today}`;
+  const nudgeType = `overdue_nudge_${today}_slot${slot}`;
   const chatIds = await getChatIds(supabase);
   if (!chatIds.length) return json(res, 200, { ok: true, msg: "No chats" });
 
   const { data: alreadySent } = await supabase
     .from("notifications_sent").select("id").eq("type", nudgeType).limit(1);
-  if (alreadySent?.length) return json(res, 200, { ok: true, skipped: true, reason: "Already nudged today" });
+  if (alreadySent?.length) return json(res, 200, { ok: true, skipped: true, reason: `Already nudged today (slot ${slot})` });
 
   const { data: tasks, error } = await supabase
     .from("lines").select("id, raw, parsed").eq("bucket", "tasks")
@@ -96,12 +101,16 @@ async function handleOverdue(req: any, res: any, supabase: any) {
 
   if (!overdue.length) return json(res, 200, { ok: true, msg: "No overdue tasks" });
 
-  const lines = [`Overdue nudge — ${overdue.length} task${overdue.length > 1 ? "s" : ""} overdue:`];
+  const header = slot === "2"
+    ? `End-of-day — ${overdue.length} task${overdue.length > 1 ? "s" : ""} still overdue:`
+    : `Overdue nudge — ${overdue.length} task${overdue.length > 1 ? "s" : ""} overdue:`;
+
+  const lines = [header];
   for (const t of overdue.slice(0, 10)) {
     lines.push(`- ${t.raw.slice(0, 60)} ^${t.parsed?.due ?? "?"}${t.parsed?.priority ? ` !${t.parsed.priority}` : ""}`);
   }
   if (overdue.length > 10) lines.push(`…and ${overdue.length - 10} more.`);
-  lines.push("\nReview and reschedule or mark done.");
+  lines.push(slot === "2" ? "\nLast chance today — mark done or reschedule." : "\nReview and reschedule or mark done.");
   const msg = lines.join("\n");
 
   for (const cid of chatIds) {
@@ -112,7 +121,7 @@ async function handleOverdue(req: any, res: any, supabase: any) {
       chat_id: cid,
     });
   }
-  return json(res, 200, { ok: true, overdue: overdue.length, sent_to: chatIds });
+  return json(res, 200, { ok: true, slot, overdue: overdue.length, sent_to: chatIds });
 }
 
 // ── Evening check-in (habits + mood) ──────────────────────────────────────

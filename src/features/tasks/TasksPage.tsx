@@ -169,15 +169,31 @@ export function TasksPage() {
                     <LineMetadata item={it} />
                   </div>
 
-                  <button
-                    onClick={() => deleteItem(it.id)}
-                    className="shrink-0 rounded p-1 text-faint opacity-0 transition-all hover:bg-red-500/10 hover:text-red-400 group-hover:opacity-100"
-                    title="Delete"
-                  >
-                    <svg className="h-3.5 w-3.5" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-                      <path d="M3 3l8 8M11 3l-8 8" />
-                    </svg>
-                  </button>
+                  {/* Action buttons — always visible, full colour on hover */}
+                  <div className="flex shrink-0 items-center gap-0.5">
+                    <button
+                      onClick={() => toggleDone(it)}
+                      title={it.parsed?.done ? "Mark as open" : "Mark as done"}
+                      className={`rounded p-1.5 transition-all ${
+                        it.parsed?.done
+                          ? "text-emerald-400 hover:bg-emerald-500/10"
+                          : "text-faint hover:bg-emerald-500/10 hover:text-emerald-400"
+                      }`}
+                    >
+                      <svg className="h-3.5 w-3.5" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M2 7l4 4 6-6" />
+                      </svg>
+                    </button>
+                    <button
+                      onClick={() => deleteItem(it.id)}
+                      className="rounded p-1.5 text-faint transition-all hover:bg-red-500/10 hover:text-red-400"
+                      title="Delete"
+                    >
+                      <svg className="h-3.5 w-3.5" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                        <path d="M3 3l8 8M11 3l-8 8" />
+                      </svg>
+                    </button>
+                  </div>
                 </li>
               ))}
             </ul>
