@@ -108,10 +108,10 @@ export const api = {
     return request<{ items: LineItem[] }>(`/api/lines${qs}`);
   },
 
-  appendLines: (text: string, defaultBucket: string = "inbox") => {
+  appendLines: (text: string, defaultBucket: string = "inbox", multiline?: boolean) => {
     return request<{ inserted: number }>(`/api/lines/append`, {
       method: "POST",
-      body: JSON.stringify({ text, defaultBucket }),
+      body: JSON.stringify({ text, defaultBucket, ...(multiline ? { multiline: true } : {}) }),
     });
   },
 

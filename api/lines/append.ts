@@ -187,8 +187,52 @@ export default async function handler(req: any, res: any) {
     const body = req.body ?? {};
     const text = String(body.text ?? "");
     const defaultBucket = (body.defaultBucket as Bucket | undefined) ?? "inbox";
+    const multiline = body.multiline === true;
     const source = "web";
 
+    // ── Multiline mode: whole text becomes one entry ──────────────
+    if (multiline) {
+      const raw = text.replace(/\r\n/g, "\n").trim();
+      if (!raw) return json(res, 200, { inserted: 0 });
+
+      // Honour bucket prefix on the first two chars (e.g. "n: ")
+      const firstTwo = raw.slice(0, 2).toLowerCase();
+      const bucket = BUCKET_PREFIX[firstTwo] ?? defaultBucket;
+      const content = BUCKET_PREFIX[firstTwo] ? raw.slice(2).trimStart() : raw;
+
+      // Parse metadata across the entire text
+      const tags = extractAll(/#([a-zA-Z0-9_-]+)/g, content).map((t) => t.toLowerCase());
+      const projects = extractAll(/@(?!\d{2}:\d{2})([a-zA-Z0-9_-]+)/g, content).map((p) => p.toLowerCase());
+      // Due / priority are typically on the first line
+      const firstLine = content.split("\n")[0];
+      const { due, due_time } = parseDue(firstLine);
+      const priority = firstLine.match(/!(1|2|3)\b/)?.[1] ?? null;
+      const urls = extractAll(/\b(https?:\/\/[^\s)]+)\b/g, content);
+
+      const row = {
+        bucket,
+        raw: content,
+        source,
+        parsed: {
+          tags,
+          project: projects[0] ?? null,
+          projects,
+          due,
+          due_time: due ? due_time : null,
+          priority: priority ? Number(priority) : null,
+          done: null,
+          urls,
+        },
+      };
+
+      const { error } = await supabase.from("lines").insert([row]);
+      if (error) return json(res, 500, { error: error.message });
+
+      notifyTelegram(supabase, `Web: Added 1 item (${bucket})`).catch(() => {});
+      return json(res, 200, { inserted: 1 });
+    }
+
+    // ── Line-by-line mode (default) ───────────────────────────────
     const lines = splitIntoLines(text);
     if (!lines.length) return json(res, 200, { inserted: 0 });
 

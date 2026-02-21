@@ -33,7 +33,7 @@ export function NotesPage() {
     if (!draft.trim()) return;
     setAdding(true);
     try {
-      await api.appendLines(draft, bucket);
+      await api.appendLines(draft, bucket, true);
       setDraft("");
       await refresh();
     } catch (e: any) {
@@ -71,8 +71,8 @@ export function NotesPage() {
           <div className="rounded-2xl border border-app bg-surface p-5 shadow-sm transition-colors">
             <textarea
               className="w-full resize-none bg-transparent font-mono text-[13px] leading-relaxed text-primary placeholder:text-faint outline-none"
-              rows={6}
-              placeholder={`ECAM alerts could work for robot telemetry @ftc\nThe barista method: grind finer until it chokes, then back off\nRead "Thinking in Systems" by Donella Meadows #reading`}
+              rows={8}
+              placeholder={`Meeting notes with @work #project\n- discussed the roadmap\n- decided to move to Q2\n- action items: update docs\n\nTags and @projects work anywhere in the note.`}
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
               onKeyDown={(e) => {
@@ -81,7 +81,7 @@ export function NotesPage() {
             />
 
             <div className="mt-4 flex items-center justify-between border-t border-subtle pt-4">
-              <span className="text-[11px] text-faint">Ctrl+Enter · multi-line OK</span>
+              <span className="text-[11px] text-faint">Enter for new line · Ctrl+Enter to save</span>
               <button
                 className="rounded-lg bg-[var(--accent)] px-4 py-2 text-xs font-semibold text-[var(--accent-fg)] shadow-sm transition-all hover:bg-[var(--accent-hover)] active:scale-[0.97] disabled:opacity-40"
                 disabled={adding || !draft.trim()}
@@ -124,7 +124,7 @@ export function NotesPage() {
                   style={{ animationDelay: `${i * 20}ms` }}
                 >
                   <div className="min-w-0 flex-1">
-                    <div className="font-mono text-[13px] leading-relaxed text-primary">{it.raw}</div>
+                    <div className="font-mono text-[13px] leading-relaxed text-primary whitespace-pre-wrap">{it.raw}</div>
                     <LineMetadata item={it} />
                   </div>
                   <button
