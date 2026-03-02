@@ -115,6 +115,23 @@ export default async function handler(req: any, res: any) {
 
     if (req.method === "POST") {
       const body = req.body ?? {};
+
+      // ── Set monthly saving (formerly /api/budget/savings POST) ────
+      if (String(body.action ?? "") === "set-savings") {
+        const month = (body.month as string) || ymInTZ(new Date(), TZ);
+        const account = String(body.account ?? "").trim();
+        const amount = Number(body.amount);
+        if (!account) return json(res, 400, { error: "account required" });
+        if (isNaN(amount)) return json(res, 400, { error: "amount must be a number" });
+        const { data, error } = await supabase
+          .from("budget_monthly_savings")
+          .upsert({ month, account, amount }, { onConflict: "month,account" })
+          .select().single();
+        if (error) return json(res, 500, { error: error.message });
+        return json(res, 200, { ok: true, saving: data });
+      }
+
+      // ── Add transaction ───────────────────────────────────────────
       const amount = Number(body.amount);
       const category = String(body.category ?? "general").toLowerCase().replace(/^@/, "");
       const description = String(body.description ?? "").trim();

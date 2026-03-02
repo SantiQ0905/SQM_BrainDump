@@ -178,14 +178,15 @@ export const api = {
     }),
 
   habitLog: (params?: { days?: number }) => {
-    const q = params?.days ? `?days=${params.days}` : "";
-    return request<{ habits: HabitDefinition[]; logs: HabitLog[] }>(`/api/habits/log${q}`);
+    const q = new URLSearchParams({ logs: "true" });
+    if (params?.days) q.set("days", String(params.days));
+    return request<{ habits: HabitDefinition[]; logs: HabitLog[] }>(`/api/habits?${q}`);
   },
 
   logHabits: (date: string, results: Record<string, boolean>) =>
-    request<{ ok: boolean; updated?: boolean; created?: boolean; date: string }>(`/api/habits/log`, {
+    request<{ ok: boolean; updated?: boolean; created?: boolean; date: string }>(`/api/habits`, {
       method: "POST",
-      body: JSON.stringify({ date, results }),
+      body: JSON.stringify({ action: "log", date, results }),
     }),
 
   // ── Mood ────────────────────────────────────────────────────────
@@ -222,15 +223,10 @@ export const api = {
       body: JSON.stringify(tx),
     }),
 
-  budgetSavings: (month?: string) => {
-    const q = month ? `?month=${month}` : "";
-    return request<{ month: string; savings: BudgetSaving[] }>(`/api/budget/savings${q}`);
-  },
-
   setSaving: (account: string, amount: number, month?: string) =>
-    request<{ ok: boolean; saving: BudgetSaving }>(`/api/budget/savings`, {
+    request<{ ok: boolean; saving: BudgetSaving }>(`/api/budget`, {
       method: "POST",
-      body: JSON.stringify({ account, amount, month }),
+      body: JSON.stringify({ action: "set-savings", account, amount, month }),
     }),
 };
 
