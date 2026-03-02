@@ -24,14 +24,6 @@ function ymdInTZ(d: Date, tz: string): string {
   return `${y}-${m}-${day}`;
 }
 
-function ymInTZ(d: Date, tz: string): string {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: tz, year: "numeric", month: "2-digit",
-  }).formatToParts(d);
-  const y = parts.find((p) => p.type === "year")?.value ?? "1970";
-  const m = parts.find((p) => p.type === "month")?.value ?? "01";
-  return `${y}-${m}`;
-}
 
 // GET /api/habits/log?days=N  →  returns last N days of habit logs + active habits
 // POST /api/habits/log        →  upsert today's habit log
@@ -74,7 +66,7 @@ export default async function handler(req: any, res: any) {
 
     if (req.method === "POST") {
       const body = req.body ?? {};
-      const date = (body.date as string) || ymInTZ(new Date(), TZ);
+      const date = (body.date as string) || ymdInTZ(new Date(), TZ);
       const results = (body.results as Record<string, boolean>) ?? {};
       const source = (body.source as string) || "web";
       const telegram_chat_id = body.telegram_chat_id as string | undefined;
@@ -94,7 +86,7 @@ export default async function handler(req: any, res: any) {
       const resultLines = habitList.map((h: any, i: number) =>
         `${i + 1}. ${h.name}: ${results[h.id] ? "YES" : "NO"}`
       );
-      const raw = `Habits (monthly) ${date}:\n${resultLines.join("\n")}`;
+      const raw = `Habits ${date}:\n${resultLines.join("\n")}`;
 
       const parsed: Record<string, any> = { date, results };
       if (telegram_chat_id) parsed.telegram_chat_id = telegram_chat_id;

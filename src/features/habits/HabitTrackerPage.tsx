@@ -4,6 +4,12 @@ import type { HabitDefinition, HabitLog } from "../../lib/api";
 
 const TZ = "America/Monterrey";
 
+function todayYMD(): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: TZ, year: "numeric", month: "2-digit", day: "2-digit",
+  }).format(new Date());
+}
+
 function thisMonthYM(): string {
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: TZ, year: "numeric", month: "2-digit",
@@ -23,7 +29,8 @@ export function HabitTrackerPage() {
   const [addingHabit, setAddingHabit] = useState(false);
   const [todayChecks, setTodayChecks] = useState<Record<string, boolean>>({});
 
-  const today = thisMonthYM();
+  const today = todayYMD();
+  const thisMonth = thisMonthYM();
 
   async function refresh() {
     setLoading(true);
@@ -104,18 +111,27 @@ export function HabitTrackerPage() {
   const todayLog = logs.find((l) => l.parsed?.date === today);
   const todayDone = activeHabits.filter((h) => todayChecks[h.id]).length;
 
+  // Monthly progress: count days each habit was done this month
+  const thisMonthLogs = logs.filter((l) => typeof l.parsed?.date === "string" && l.parsed.date.startsWith(thisMonth));
+  const daysLoggedThisMonth = thisMonthLogs.length;
+  const monthlyProgress = activeHabits.map((h) => {
+    const done = thisMonthLogs.filter((l) => l.parsed?.results?.[h.id] === true).length;
+    const pct = daysLoggedThisMonth > 0 ? Math.round((done / daysLoggedThisMonth) * 100) : 0;
+    return { habit: h, done, pct };
+  });
+
   return (
     <div className="animate-page">
       <div className="mb-8 flex items-baseline justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-primary">Habit Tracker</h1>
           <p className="mt-1 text-sm text-muted">
-            Monthly habits — log once per month via the app or Telegram (HT: ...).
+            Daily habits — checked every night at 10 PM via Telegram.
           </p>
         </div>
         {!loading && activeHabits.length > 0 && (
           <span className="rounded-full bg-[var(--surface-raised)] border border-app px-3 py-1 text-xs font-medium text-secondary">
-            {todayDone}/{activeHabits.length} this month
+            {todayDone}/{activeHabits.length} today
           </span>
         )}
       </div>
@@ -126,7 +142,7 @@ export function HabitTrackerPage() {
           {/* Today's check-in */}
           <div className="rounded-2xl border border-app bg-surface p-5 shadow-sm transition-colors">
             <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-primary">This Month — {today}</h2>
+              <h2 className="text-sm font-semibold text-primary">Today — {today}</h2>
               {todayLog && (
                 <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-semibold text-emerald-400">
                   Logged ✓
@@ -176,7 +192,7 @@ export function HabitTrackerPage() {
                 disabled={saving}
                 className="mt-5 w-full rounded-lg bg-[var(--accent)] px-4 py-2 text-xs font-semibold text-[var(--accent-fg)] shadow-sm transition-all hover:bg-[var(--accent-hover)] active:scale-[0.97] disabled:opacity-40"
               >
-                {saving ? "Saving…" : "Log This Month's Habits"}
+                {saving ? "Saving…" : "Log Today's Habits"}
               </button>
             )}
 
@@ -240,8 +256,43 @@ export function HabitTrackerPage() {
           </div>
         </div>
 
-        {/* Right column — history */}
-        <div className="rounded-2xl border border-app bg-surface shadow-sm transition-colors">
+        {/* Right column — monthly progress + history */}
+        <div className="space-y-4">
+
+          {/* Monthly progress */}
+          {!loading && activeHabits.length > 0 && (
+            <div className="rounded-2xl border border-app bg-surface p-5 shadow-sm transition-colors">
+              <div className="mb-4 flex items-center justify-between">
+                <h2 className="text-sm font-semibold text-primary">This Month — {thisMonth}</h2>
+                <span className="text-[11px] text-muted">{daysLoggedThisMonth} day{daysLoggedThisMonth !== 1 ? "s" : ""} logged</span>
+              </div>
+              <ul className="space-y-3">
+                {monthlyProgress.map(({ habit, done, pct }) => (
+                  <li key={habit.id}>
+                    <div className="mb-1 flex items-center justify-between">
+                      <span className="text-[12px] text-primary">{habit.name}</span>
+                      <span className={`text-[11px] font-semibold ${
+                        pct === 100 ? "text-emerald-400" : pct >= 50 ? "text-amber-400" : "text-red-400"
+                      }`}>
+                        {done}/{daysLoggedThisMonth}d ({pct}%)
+                      </span>
+                    </div>
+                    <div className="h-1.5 w-full overflow-hidden rounded-full bg-[var(--surface-raised)]">
+                      <div
+                        className={`h-full rounded-full transition-all ${
+                          pct === 100 ? "bg-emerald-500" : pct >= 50 ? "bg-amber-500" : "bg-red-500"
+                        }`}
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* Recent logs */}
+          <div className="rounded-2xl border border-app bg-surface shadow-sm transition-colors">
           <div className="border-b border-subtle px-5 py-4">
             <h2 className="text-sm font-semibold text-primary">Recent Logs</h2>
           </div>
@@ -295,6 +346,7 @@ export function HabitTrackerPage() {
               })}
             </ul>
           )}
+          </div>
         </div>
       </div>
     </div>

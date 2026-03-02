@@ -101,17 +101,6 @@ function ymdInTZ(d: Date, tz: string): string {
   return `${y}-${m}-${day}`;
 }
 
-function ymInTZ(d: Date, tz: string): string {
-  // returns YYYY-MM in tz
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: tz,
-    year: "numeric",
-    month: "2-digit",
-  }).formatToParts(d);
-  const y = parts.find((p) => p.type === "year")?.value ?? "1970";
-  const m = parts.find((p) => p.type === "month")?.value ?? "01";
-  return `${y}-${m}`;
-}
 
 function addDays(date: Date, days: number) {
   const d = new Date(date.getTime());
@@ -387,7 +376,7 @@ async function handleCommand(chatId: string | number, text: string, supabase: an
       "/last             last 10 captures",
       "/done [N]         toggle task done",
       "/del N            delete item",
-      "/habits           show this month's habit list",
+      "/habits           show today's habit list",
       "/listhabits       list all configured habits",
       "/addhabit X       add a new habit",
       "/mood             show mood prompt",
@@ -701,7 +690,7 @@ async function handleCommand(chatId: string | number, text: string, supabase: an
 
   // ── /habits ────────────────────────────────────────────────────
   if (cmd === "/habits") {
-    const thisMonth = ymInTZ(new Date(), TZ); // YYYY-MM
+    const today = ymdInTZ(new Date(), TZ);
 
     const [{ data: habits }, { data: logs }] = await Promise.all([
       supabase
@@ -723,19 +712,19 @@ async function handleCommand(chatId: string | number, text: string, supabase: an
       return true;
     }
 
-    const monthLog = (logs ?? []).find((r: any) => r.parsed?.date === thisMonth);
-    const monthResults = monthLog?.parsed?.results ?? {};
+    const todayLog = (logs ?? []).find((r: any) => r.parsed?.date === today);
+    const todayResults = todayLog?.parsed?.results ?? {};
 
-    const lines: string[] = [`Monthly Habit Check-in (${thisMonth}):`];
+    const lines: string[] = [`Habit Check-in (${today}):`];
     for (const h of activeHabits) {
-      const done = monthResults[h.id];
+      const done = todayResults[h.id];
       const icon = done === true ? "✓" : done === false ? "✗" : "○";
       lines.push(`${icon} ${h.sort_order}. ${h.name}`);
     }
 
-    if (monthLog) {
-      const doneCount = activeHabits.filter((h: any) => monthResults[h.id] === true).length;
-      lines.push(`\nThis month: ${doneCount}/${activeHabits.length} done ✅`);
+    if (todayLog) {
+      const doneCount = activeHabits.filter((h: any) => todayResults[h.id] === true).length;
+      lines.push(`\nToday: ${doneCount}/${activeHabits.length} done ✅`);
     } else {
       lines.push("\nReply: HT: 1-YES, 2-NO, 3-YES...");
     }
@@ -768,14 +757,20 @@ async function handleCommand(chatId: string | number, text: string, supabase: an
   // ── /streak ────────────────────────────────────────────────────
   if (cmd === "/streak") {
     const today = ymdInTZ(new Date(), TZ);
+    const monthPrefix = today.slice(0, 7); // "YYYY-MM"
 
-    const [{ data: habitLogs }, { data: moodLogs }, { data: taskRows }] = await Promise.all([
+    const [{ data: habitLogs }, { data: habitDefs }, { data: moodLogs }, { data: taskRows }] = await Promise.all([
       supabase
         .from("lines")
         .select("parsed")
         .eq("bucket", "habits")
         .order("created_at", { ascending: false })
         .limit(60),
+      supabase
+        .from("habit_definitions")
+        .select("id, name, sort_order")
+        .eq("active", true)
+        .order("sort_order", { ascending: true }),
       supabase
         .from("lines")
         .select("parsed")
@@ -834,6 +829,20 @@ async function handleCommand(chatId: string | number, text: string, supabase: an
       ? Math.round((doneTasks / recentTasks.length) * 100)
       : 0;
 
+    // Monthly habit progress: count how many days this month each habit was done
+    const thisMonthLogs = (habitLogs ?? []).filter((r: any) =>
+      typeof r.parsed?.date === "string" && r.parsed.date.startsWith(monthPrefix)
+    );
+    const daysLoggedThisMonth = thisMonthLogs.length;
+    const activeHabits: any[] = habitDefs ?? [];
+
+    const monthlyProgress = activeHabits.map((h: any) => {
+      const doneCount = thisMonthLogs.filter((r: any) => r.parsed?.results?.[h.id] === true).length;
+      const pct = daysLoggedThisMonth > 0 ? Math.round((doneCount / daysLoggedThisMonth) * 100) : 0;
+      const bar = doneCount === daysLoggedThisMonth && daysLoggedThisMonth > 0 ? "✓" : "○";
+      return `${bar} ${h.name}: ${doneCount}/${daysLoggedThisMonth}d (${pct}%)`;
+    });
+
     const lines = [
       `Streaks & Stats (${today}):`,
       ``,
@@ -842,6 +851,10 @@ async function handleCommand(chatId: string | number, text: string, supabase: an
       `Mood avg (7d):  ${moodAvg}/5`,
       `Task done (30d): ${doneTasks}/${recentTasks.length} (${rate}%)`,
     ];
+
+    if (monthlyProgress.length > 0) {
+      lines.push(``, `Monthly habits (${monthPrefix}):`, ...monthlyProgress);
+    }
 
     await tgSendMessage(chatId, lines.join("\n"), { reply_markup: smartKeyboard() });
     return true;
@@ -865,7 +878,7 @@ async function handleHabitLog(
   if (!match) return false;
 
   const body = match[1].trim();
-  const today = ymInTZ(new Date(), TZ); // YYYY-MM for monthly tracking
+  const today = ymdInTZ(new Date(), TZ);
 
   const { data: habits } = await supabase
     .from("habit_definitions")
@@ -914,7 +927,7 @@ async function handleHabitLog(
   const resultLines = activeHabits.map((h: any, i: number) =>
     `${i + 1}. ${h.name}: ${results[h.id] ? "YES" : "NO"}`
   );
-  const raw = `Habits (monthly) ${today}:\n${resultLines.join("\n")}`;
+  const raw = `Habits ${today}:\n${resultLines.join("\n")}`;
   const parsed: Record<string, any> = { date: today, results, telegram_chat_id: chatIdStr };
   if (userId) parsed.telegram_user_id = userId;
 
@@ -939,7 +952,7 @@ async function handleHabitLog(
     `${results[h.id] ? "✓" : "✗"} ${i + 1}. ${h.name}`
   );
   await tgSendMessage(chatId,
-    `Monthly habits logged ✅ for ${today} (${doneCount}/${activeHabits.length}):\n${confirmLines.join("\n")}`,
+    `Habits logged ✅ (${doneCount}/${activeHabits.length}):\n${confirmLines.join("\n")}`,
     { reply_markup: smartKeyboard() }
   );
   return true;
