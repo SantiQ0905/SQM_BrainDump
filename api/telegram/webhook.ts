@@ -101,6 +101,14 @@ function ymdInTZ(d: Date, tz: string): string {
   return `${y}-${m}-${day}`;
 }
 
+function ymInTZ(d: Date, tz: string): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: tz, year: "numeric", month: "2-digit",
+  }).formatToParts(d);
+  const y = parts.find((p) => p.type === "year")?.value ?? "1970";
+  const m = parts.find((p) => p.type === "month")?.value ?? "01";
+  return `${y}-${m}`;
+}
 
 function addDays(date: Date, days: number) {
   const d = new Date(date.getTime());
@@ -381,6 +389,10 @@ async function handleCommand(chatId: string | number, text: string, supabase: an
       "/addhabit X       add a new habit",
       "/mood             show mood prompt",
       "/streak           show streaks & stats",
+      "/budget           show this month's cashflow",
+      "",
+      "Budget: BM: +$5000 @earnings Salary #ScotiabankDebit",
+      "        BM: -$300 @food Groceries #NUDebit",
       "",
       "Tip: paste multiple lines — I'll split them.",
     ].join("\n");
@@ -860,6 +872,73 @@ async function handleCommand(chatId: string | number, text: string, supabase: an
     return true;
   }
 
+  // ── /budget ────────────────────────────────────────────────────
+  if (cmd === "/budget") {
+    const thisMonth = ymInTZ(new Date(), TZ);
+    const monthStart = `${thisMonth}-01`;
+    const [y, mo] = thisMonth.split("-").map(Number);
+    const nextMonth = mo === 12 ? `${y + 1}-01-01` : `${y}-${String(mo + 1).padStart(2, "0")}-01`;
+
+    const [{ data: txRows }, { data: savRows }] = await Promise.all([
+      supabase
+        .from("budget_transactions")
+        .select("amount, category, account, description, date")
+        .gte("date", monthStart)
+        .lt("date", nextMonth)
+        .order("date", { ascending: false }),
+      supabase
+        .from("budget_monthly_savings")
+        .select("account, amount")
+        .eq("month", thisMonth),
+    ]);
+
+    const txs: any[] = txRows ?? [];
+    const savings: any[] = savRows ?? [];
+
+    const totalIncome = txs.filter((t) => t.amount > 0).reduce((s, t) => s + Number(t.amount), 0);
+    const totalExpenses = txs.filter((t) => t.amount < 0).reduce((s, t) => s + Math.abs(Number(t.amount)), 0);
+    const netFlow = totalIncome - totalExpenses;
+    const totalSavings = savings.reduce((s, r) => s + Number(r.amount), 0);
+
+    // By category (expenses only, top 5)
+    const catMap: Record<string, number> = {};
+    for (const t of txs.filter((t) => t.amount < 0)) {
+      catMap[t.category] = (catMap[t.category] ?? 0) + Math.abs(Number(t.amount));
+    }
+    const topCats = Object.entries(catMap)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([cat, amt]) => `  @${cat}: $${amt.toFixed(2)}`);
+
+    const fmt = (n: number) => `$${n.toFixed(2)}`;
+    const msgLines = [
+      `Cashflow — ${thisMonth}:`,
+      ``,
+      `Savings (start): ${fmt(totalSavings)}`,
+      `Income:          ${fmt(totalIncome)}`,
+      `Expenses:        ${fmt(totalExpenses)}`,
+      `Net:             ${netFlow >= 0 ? "+" : ""}${fmt(netFlow)}`,
+    ];
+
+    if (savings.length > 0) {
+      msgLines.push(``, `Accounts:`);
+      for (const s of savings) {
+        const accTxs = txs.filter((t) => t.account === s.account);
+        const accNet = accTxs.reduce((sum, t) => sum + Number(t.amount), 0);
+        msgLines.push(`  ${s.account}: ${fmt(Number(s.amount) + accNet)} (${accNet >= 0 ? "+" : ""}${fmt(accNet)})`);
+      }
+    }
+
+    if (topCats.length > 0) {
+      msgLines.push(``, `Top expenses:`);
+      msgLines.push(...topCats);
+    }
+
+    msgLines.push(``, `(${txs.length} transactions this month)`);
+    await tgSendMessage(chatId, msgLines.join("\n"), { reply_markup: smartKeyboard() });
+    return true;
+  }
+
   return false;
 }
 
@@ -1006,6 +1085,75 @@ async function handleMoodLog(
 }
 
 /* ──────────────────────────────────────────────────────────────
+   Budget log parser: "BM: +$16000 @earnings Rent #ScotiabankDebit"
+                      "BM: -$300 @food Groceries #NUDebit"
+   ────────────────────────────────────────────────────────────── */
+
+async function handleBudgetLog(
+  chatId: string | number,
+  text: string,
+  supabase: any,
+  chatIdStr: string
+): Promise<boolean> {
+  // Match: BM: [+-]$amount rest
+  const match = text.match(/^BM:\s*([+-])?\$?([\d,]+(?:\.\d{1,2})?)\s*(.*)/i);
+  if (!match) return false;
+
+  const sign = match[1] === "-" ? -1 : 1;
+  const amount = sign * parseFloat(match[2].replace(/,/g, ""));
+  const rest = match[3].trim();
+
+  if (isNaN(amount) || amount === 0) {
+    await tgSendMessage(chatId, "Invalid amount. Example: BM: -$300 @food Groceries #NUDebit");
+    return true;
+  }
+
+  const categoryMatch = rest.match(/@([a-zA-Z0-9_-]+)/);
+  const accountMatch = rest.match(/#([a-zA-Z0-9_-]+)/);
+  const category = categoryMatch?.[1]?.toLowerCase() ?? "general";
+  const account = accountMatch?.[1] ?? "";
+  const description = rest
+    .replace(/@[a-zA-Z0-9_-]+/, "")
+    .replace(/#[a-zA-Z0-9_-]+/, "")
+    .trim();
+
+  if (!account) {
+    await tgSendMessage(chatId, "Account required. Use #AccountName (e.g. #AMEX, #NUDebit, #ScotiabankDebit)");
+    return true;
+  }
+
+  const today = ymdInTZ(new Date(), TZ);
+  const sign_str = amount > 0 ? "+" : "-";
+  const raw = `BM: ${sign_str}$${Math.abs(amount).toFixed(2)} @${category}${description ? " " + description : ""} #${account}`;
+
+  const row: Record<string, any> = {
+    date: today,
+    amount,
+    category,
+    description,
+    account,
+    source: "telegram",
+    raw,
+    telegram_chat_id: chatIdStr,
+  };
+
+  const { error } = await supabase.from("budget_transactions").insert(row);
+  if (error) {
+    await tgSendMessage(chatId, `Error saving transaction: ${error.message}`);
+    return true;
+  }
+
+  const typeLabel = amount > 0 ? "Income" : "Expense";
+  const amtLabel = `$${Math.abs(amount).toFixed(2)}`;
+  await tgSendMessage(
+    chatId,
+    `${typeLabel} logged ✅\n${amtLabel} @${category}${description ? " — " + description : ""}\nAccount: ${account}`,
+    { reply_markup: smartKeyboard() }
+  );
+  return true;
+}
+
+/* ──────────────────────────────────────────────────────────────
    Handler
    ────────────────────────────────────────────────────────────── */
 
@@ -1064,6 +1212,12 @@ export default async function handler(req: any, res: any) {
     if (/^(?:MD|Mood):/i.test(text.trim())) {
       const handled = await handleMoodLog(chatId, text.trim(), supabase, chatIdStr!, userId);
       if (handled) return json(res, 200, { ok: true, mood_log: true });
+    }
+
+    // Budget log pattern: "BM: +$16000 @earnings Rent #ScotiabankDebit"
+    if (/^BM:/i.test(text.trim())) {
+      const handled = await handleBudgetLog(chatId, text.trim(), supabase, chatIdStr!);
+      if (handled) return json(res, 200, { ok: true, budget_log: true });
     }
 
     const lines = splitIntoLines(text);

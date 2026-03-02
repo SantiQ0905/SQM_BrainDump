@@ -13,6 +13,7 @@ const NAV_ITEMS: { to: string; label: string; icon: string }[] = [
   { to: "/habits",    label: "Habits",    icon: "H" },
   { to: "/mood",      label: "Mood",      icon: "M" },
   { to: "/metrics",   label: "Metrics",   icon: "~" },
+  { to: "/budget",    label: "Budget",    icon: "$" },
 ];
 
 /** Small tooltip that appears to the right when sidebar is collapsed */

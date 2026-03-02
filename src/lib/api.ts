@@ -98,6 +98,44 @@ export type Metrics = {
   }>;
 };
 
+export type BudgetTransaction = {
+  id: string;
+  date: string;
+  amount: number;
+  category: string;
+  description: string;
+  account: string;
+  source: string;
+  raw: string;
+  created_at: string;
+};
+
+export type BudgetSaving = {
+  id: string;
+  month: string;
+  account: string;
+  amount: number;
+};
+
+export type BudgetSummary = {
+  totalIncome: number;
+  totalExpenses: number;
+  netFlow: number;
+  byAccount: Record<string, { income: number; expenses: number; net: number }>;
+  byCategory: Record<string, number>;
+};
+
+export type BudgetData = {
+  month: string;
+  transactions: BudgetTransaction[];
+  savings: BudgetSaving[];
+  totalSavings: number;
+  summary: BudgetSummary;
+};
+
+export const ACCOUNTS = ["AMEX", "NUCredit", "NUDebit", "ScotiabankDebit"] as const;
+export type Account = typeof ACCOUNTS[number];
+
 export const api = {
   lines: (params?: { bucket?: string; search?: string; tag?: string }) => {
     const q = new URLSearchParams();
@@ -166,5 +204,33 @@ export const api = {
   metrics: () =>
     request<Metrics>(`/api/metrics`),
 
+  // ── Budget ──────────────────────────────────────────────────────
+  budget: (month?: string) => {
+    const q = month ? `?month=${month}` : "";
+    return request<BudgetData>(`/api/budget${q}`);
+  },
+
+  addTransaction: (tx: {
+    amount: number;
+    category: string;
+    description?: string;
+    account: string;
+    date?: string;
+  }) =>
+    request<{ ok: boolean; transaction: BudgetTransaction }>(`/api/budget`, {
+      method: "POST",
+      body: JSON.stringify(tx),
+    }),
+
+  budgetSavings: (month?: string) => {
+    const q = month ? `?month=${month}` : "";
+    return request<{ month: string; savings: BudgetSaving[] }>(`/api/budget/savings${q}`);
+  },
+
+  setSaving: (account: string, amount: number, month?: string) =>
+    request<{ ok: boolean; saving: BudgetSaving }>(`/api/budget/savings`, {
+      method: "POST",
+      body: JSON.stringify({ account, amount, month }),
+    }),
 };
 

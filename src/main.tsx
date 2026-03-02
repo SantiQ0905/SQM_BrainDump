@@ -13,6 +13,7 @@ import { LinesPage } from "./features/lines/LinesPage";
 import { HabitTrackerPage } from "./features/habits/HabitTrackerPage";
 import { MoodTrackerPage } from "./features/mood/MoodTrackerPage";
 import { MetricsPage } from "./features/metrics/MetricsPage";
+import { BudgetPage } from "./features/budget/BudgetPage";
 
 const router = createBrowserRouter([
   { path: "/", element: <Navigate to="/inbox" replace /> },
@@ -32,6 +33,7 @@ const router = createBrowserRouter([
       { path: "habits",    element: <HabitTrackerPage /> },
       { path: "mood",      element: <MoodTrackerPage /> },
       { path: "metrics",   element: <MetricsPage /> },
+      { path: "budget",    element: <BudgetPage /> },
     ],
   },
 ]);

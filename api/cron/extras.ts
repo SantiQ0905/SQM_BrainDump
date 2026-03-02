@@ -196,6 +196,52 @@ async function handleCheckin(req: any, res: any, supabase: any) {
   return json(res, 200, { ok: true, today, messages_sent: messages.length, sent_to: chatIds });
 }
 
+// ── Daily spending prompt ──────────────────────────────────────────────────
+// Fires at ~8 PM Monterrey (2 AM UTC) — window 19-21
+async function handleSpending(req: any, res: any, supabase: any) {
+  const localHour = getLocalHour(TZ);
+  if (localHour < 19 || localHour > 21) {
+    return json(res, 200, { ok: true, skipped: true, reason: `hour=${localHour}, outside spending prompt window` });
+  }
+
+  const today = ymdInTZ(new Date(), TZ);
+  const chatIds = await getChatIds(supabase);
+  if (!chatIds.length) return json(res, 200, { ok: true, msg: "No chats" });
+
+  // Check if already prompted today (reuse notifications_sent)
+  const nudgeType = `spending_prompt_${today}`;
+  const { data: alreadySent } = await supabase
+    .from("notifications_sent").select("id").eq("type", nudgeType).limit(1);
+  if (alreadySent?.length) return json(res, 200, { ok: true, skipped: true, reason: "Already prompted today" });
+
+  // Summarise today's transactions if any
+  const { data: todayTxs } = await supabase
+    .from("budget_transactions")
+    .select("amount, category, account, description")
+    .eq("date", today);
+
+  const txs: any[] = todayTxs ?? [];
+  const todayExpenses = txs.filter((t) => t.amount < 0).reduce((s, t) => s + Math.abs(Number(t.amount)), 0);
+  const todayIncome  = txs.filter((t) => t.amount > 0).reduce((s, t) => s + Number(t.amount), 0);
+
+  const lines = [`Spending check-in (${today}):`];
+  if (txs.length === 0) {
+    lines.push(`No transactions recorded today.`);
+  } else {
+    if (todayIncome > 0)  lines.push(`  Income:  +$${todayIncome.toFixed(2)}`);
+    if (todayExpenses > 0) lines.push(`  Spent:   -$${todayExpenses.toFixed(2)}`);
+    lines.push(`  (${txs.length} transaction${txs.length !== 1 ? "s" : ""})`);
+  }
+  lines.push(``, `Log with: BM: -$amount @category Description #Account`);
+  lines.push(`Example:  BM: -$120 @food Groceries #NUDebit`);
+
+  for (const cid of chatIds) {
+    await tgSend(cid, lines.join("\n"));
+    await supabase.from("notifications_sent").insert({ type: nudgeType, chat_id: cid });
+  }
+  return json(res, 200, { ok: true, today, transactions: txs.length, sent_to: chatIds });
+}
+
 // ── Main handler ───────────────────────────────────────────────────────────
 export default async function handler(req: any, res: any) {
   try {
@@ -216,10 +262,11 @@ export default async function handler(req: any, res: any) {
 
     const type = (req.query?.type as string) ?? "";
 
-    if (type === "overdue") return await handleOverdue(req, res, supabase);
-    if (type === "checkin") return await handleCheckin(req, res, supabase);
+    if (type === "overdue")  return await handleOverdue(req, res, supabase);
+    if (type === "checkin")  return await handleCheckin(req, res, supabase);
+    if (type === "spending") return await handleSpending(req, res, supabase);
 
-    return json(res, 400, { error: "Missing ?type=overdue|checkin" });
+    return json(res, 400, { error: "Missing ?type=overdue|checkin|spending" });
   } catch (e: any) {
     console.error(e);
     return json(res, 500, { error: e?.message ?? "Server error" });

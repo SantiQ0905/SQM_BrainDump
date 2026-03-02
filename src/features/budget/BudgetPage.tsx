@@ -1,0 +1,460 @@
+import { useEffect, useState } from "react";
+import { api, ACCOUNTS } from "../../lib/api";
+import type { BudgetData, BudgetTransaction, BudgetSaving } from "../../lib/api";
+
+const TZ = "America/Monterrey";
+
+function todayYMD(): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: TZ, year: "numeric", month: "2-digit", day: "2-digit",
+  }).format(new Date());
+}
+
+function thisMonthYM(): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: TZ, year: "numeric", month: "2-digit",
+  }).formatToParts(new Date());
+  const y = parts.find((p) => p.type === "year")?.value ?? "1970";
+  const m = parts.find((p) => p.type === "month")?.value ?? "01";
+  return `${y}-${m}`;
+}
+
+function fmtAmt(n: number, always_sign = false): string {
+  const sign = n >= 0 ? (always_sign ? "+" : "") : "-";
+  return `${sign}$${Math.abs(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+function monthLabel(ym: string): string {
+  const [y, m] = ym.split("-");
+  return new Date(Number(y), Number(m) - 1, 1).toLocaleString("en-US", { month: "long", year: "numeric" });
+}
+
+function prevMonthYM(ym: string): string {
+  const [y, m] = ym.split("-").map(Number);
+  const d = new Date(y, m - 2, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+function nextMonthYM(ym: string): string {
+  const [y, m] = ym.split("-").map(Number);
+  const d = new Date(y, m, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
+const CATEGORY_COLORS: Record<string, string> = {
+  earnings: "text-emerald-400",
+  salary:   "text-emerald-400",
+  income:   "text-emerald-400",
+  food:     "text-amber-400",
+  health:   "text-rose-400",
+  transport:"text-sky-400",
+  shopping: "text-violet-400",
+  bills:    "text-orange-400",
+  general:  "text-secondary",
+};
+
+function catColor(cat: string): string {
+  return CATEGORY_COLORS[cat.toLowerCase()] ?? "text-secondary";
+}
+
+export function BudgetPage() {
+  const [month, setMonth] = useState(thisMonthYM());
+  const [data, setData] = useState<BudgetData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Add transaction form
+  const [txSign, setTxSign]   = useState<"+" | "-">("-");
+  const [txAmt, setTxAmt]     = useState("");
+  const [txCat, setTxCat]     = useState("");
+  const [txDesc, setTxDesc]   = useState("");
+  const [txAcct, setTxAcct]   = useState(ACCOUNTS[0]);
+  const [txDate, setTxDate]   = useState(todayYMD());
+  const [txSaving, setTxSaving] = useState(false);
+  const [txError, setTxError] = useState<string | null>(null);
+
+  // Monthly savings form
+  const [savAcct, setSavAcct]   = useState(ACCOUNTS[0]);
+  const [savAmt, setSavAmt]     = useState("");
+  const [savSaving, setSavSaving] = useState(false);
+  const [savError, setSavError] = useState<string | null>(null);
+
+  async function refresh() {
+    setLoading(true);
+    setError(null);
+    try {
+      const d = await api.budget(month);
+      setData(d);
+    } catch (e: any) {
+      setError(e?.message || "Failed to load");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => { refresh(); }, [month]); // eslint-disable-line
+
+  async function addTransaction() {
+    const amount = parseFloat(txAmt.replace(/,/g, ""));
+    if (isNaN(amount) || amount <= 0) { setTxError("Enter a valid amount"); return; }
+    if (!txCat.trim()) { setTxError("Category required"); return; }
+    setTxSaving(true);
+    setTxError(null);
+    try {
+      await api.addTransaction({
+        amount: txSign === "+" ? amount : -amount,
+        category: txCat.trim().replace(/^@/, ""),
+        description: txDesc.trim(),
+        account: txAcct,
+        date: txDate,
+      });
+      setTxAmt(""); setTxCat(""); setTxDesc("");
+      await refresh();
+    } catch (e: any) {
+      setTxError(e?.message || "Failed to save");
+    } finally {
+      setTxSaving(false);
+    }
+  }
+
+  async function setSaving() {
+    const amount = parseFloat(savAmt.replace(/,/g, ""));
+    if (isNaN(amount)) { setSavError("Enter a valid amount"); return; }
+    setSavSaving(true);
+    setSavError(null);
+    try {
+      await api.setSaving(savAcct, amount, month);
+      setSavAmt("");
+      await refresh();
+    } catch (e: any) {
+      setSavError(e?.message || "Failed to save");
+    } finally {
+      setSavSaving(false);
+    }
+  }
+
+  const summary = data?.summary;
+  const savings = data?.savings ?? [];
+  const transactions = data?.transactions ?? [];
+
+  // Sort by category for expense breakdown (expenses only)
+  const expenseByCategory = Object.entries(summary?.byCategory ?? {})
+    .filter(([, v]) => v < 0)
+    .map(([cat, v]) => ({ cat, amount: Math.abs(v) }))
+    .sort((a, b) => b.amount - a.amount);
+
+  const incomeByCategory = Object.entries(summary?.byCategory ?? {})
+    .filter(([, v]) => v > 0)
+    .map(([cat, v]) => ({ cat, amount: v }))
+    .sort((a, b) => b.amount - a.amount);
+
+  const maxExpense = expenseByCategory[0]?.amount ?? 1;
+
+  // Per-account: savings + net flow
+  const accountRows = ACCOUNTS.map((acc) => {
+    const sav = savings.find((s) => s.account === acc);
+    const accTxs = transactions.filter((t) => t.account === acc);
+    const net = accTxs.reduce((s, t) => s + Number(t.amount), 0);
+    const balance = (sav ? Number(sav.amount) : 0) + net;
+    return { acc, savingsAmt: sav ? Number(sav.amount) : null, net, balance };
+  }).filter((r) => r.savingsAmt !== null || r.net !== 0);
+
+  return (
+    <div className="animate-page">
+      {/* Header */}
+      <div className="mb-8 flex items-center justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-primary">Budget</h1>
+          <p className="mt-1 text-sm text-muted">
+            Cashflow tracker — log income and expenses per account.
+          </p>
+        </div>
+        {/* Month navigator */}
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setMonth(prevMonthYM(month))}
+            className="flex h-8 w-8 items-center justify-center rounded-lg border border-app text-muted transition hover:text-primary hover:bg-[var(--surface-raised)]"
+          >‹</button>
+          <span className="min-w-[140px] text-center text-sm font-semibold text-primary">
+            {monthLabel(month)}
+          </span>
+          <button
+            onClick={() => setMonth(nextMonthYM(month))}
+            disabled={month >= thisMonthYM()}
+            className="flex h-8 w-8 items-center justify-center rounded-lg border border-app text-muted transition hover:text-primary hover:bg-[var(--surface-raised)] disabled:opacity-30"
+          >›</button>
+        </div>
+      </div>
+
+      {error && (
+        <div className="mb-4 rounded-xl bg-red-500/10 px-4 py-3 text-sm text-red-400">{error}</div>
+      )}
+
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
+        {/* ── Left column ── */}
+        <div className="space-y-4">
+
+          {/* Summary cards */}
+          {!loading && summary && (
+            <div className="grid grid-cols-2 gap-3">
+              {[
+                { label: "Income",   value: summary.totalIncome,   color: "text-emerald-400" },
+                { label: "Expenses", value: summary.totalExpenses, color: "text-red-400" },
+                { label: "Net flow", value: summary.netFlow,       color: summary.netFlow >= 0 ? "text-emerald-400" : "text-red-400", signed: true },
+                { label: "Savings",  value: data!.totalSavings,    color: "text-sky-400" },
+              ].map(({ label, value, color, signed }) => (
+                <div key={label} className="rounded-2xl border border-app bg-surface p-4 shadow-sm">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-muted">{label}</p>
+                  <p className={`mt-1 text-[18px] font-bold ${color}`}>
+                    {signed ? fmtAmt(value, true) : fmtAmt(value)}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Monthly savings setup */}
+          <div className="rounded-2xl border border-app bg-surface p-5 shadow-sm">
+            <h2 className="mb-3 text-sm font-semibold text-primary">Monthly Savings</h2>
+            <p className="mb-3 text-[11px] text-muted">Set your starting balance per account for {monthLabel(month)}.</p>
+            {savings.length > 0 && (
+              <ul className="mb-3 space-y-1.5">
+                {savings.map((s) => (
+                  <li key={s.id} className="flex items-center justify-between text-[12px]">
+                    <span className="text-muted">{s.account}</span>
+                    <span className="font-semibold text-sky-400">{fmtAmt(Number(s.amount))}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <div className="flex gap-2 mb-2">
+              <select
+                value={savAcct}
+                onChange={(e) => setSavAcct(e.target.value as any)}
+                className="rounded-lg border border-app bg-[var(--surface-raised)] px-2 py-2 text-[12px] text-primary outline-none focus:border-[var(--accent)]/50"
+              >
+                {ACCOUNTS.map((a) => <option key={a} value={a}>{a}</option>)}
+              </select>
+              <input
+                type="number"
+                step="0.01"
+                className="flex-1 rounded-lg border border-app bg-[var(--surface-raised)] px-3 py-2 text-[13px] text-primary outline-none placeholder:text-faint focus:border-[var(--accent)]/50"
+                placeholder="0.00"
+                value={savAmt}
+                onChange={(e) => setSavAmt(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && setSaving()}
+              />
+              <button
+                onClick={setSaving}
+                disabled={savSaving || !savAmt}
+                className="rounded-lg bg-[var(--accent)] px-3 py-2 text-xs font-semibold text-[var(--accent-fg)] transition hover:bg-[var(--accent-hover)] disabled:opacity-40"
+              >
+                {savSaving ? "…" : "Set"}
+              </button>
+            </div>
+            {savError && <p className="text-[11px] text-red-400">{savError}</p>}
+          </div>
+
+          {/* Add transaction */}
+          <div className="rounded-2xl border border-app bg-surface p-5 shadow-sm">
+            <h2 className="mb-3 text-sm font-semibold text-primary">Add Transaction</h2>
+            <div className="space-y-2">
+              {/* Sign + Amount row */}
+              <div className="flex gap-2">
+                <div className="flex rounded-lg border border-app overflow-hidden">
+                  {(["+", "-"] as const).map((s) => (
+                    <button
+                      key={s}
+                      onClick={() => setTxSign(s)}
+                      className={`px-3 py-2 text-sm font-bold transition ${
+                        txSign === s
+                          ? s === "+" ? "bg-emerald-500/20 text-emerald-400" : "bg-red-500/20 text-red-400"
+                          : "text-muted hover:text-primary"
+                      }`}
+                    >{s}</button>
+                  ))}
+                </div>
+                <input
+                  type="number"
+                  step="0.01"
+                  className="flex-1 rounded-lg border border-app bg-[var(--surface-raised)] px-3 py-2 text-[13px] text-primary outline-none placeholder:text-faint focus:border-[var(--accent)]/50"
+                  placeholder="Amount"
+                  value={txAmt}
+                  onChange={(e) => setTxAmt(e.target.value)}
+                />
+              </div>
+              {/* Category */}
+              <input
+                type="text"
+                className="w-full rounded-lg border border-app bg-[var(--surface-raised)] px-3 py-2 text-[13px] text-primary outline-none placeholder:text-faint focus:border-[var(--accent)]/50"
+                placeholder="@category (food, health, earnings…)"
+                value={txCat}
+                onChange={(e) => setTxCat(e.target.value)}
+              />
+              {/* Description */}
+              <input
+                type="text"
+                className="w-full rounded-lg border border-app bg-[var(--surface-raised)] px-3 py-2 text-[13px] text-primary outline-none placeholder:text-faint focus:border-[var(--accent)]/50"
+                placeholder="Description (optional)"
+                value={txDesc}
+                onChange={(e) => setTxDesc(e.target.value)}
+              />
+              {/* Account + Date row */}
+              <div className="flex gap-2">
+                <select
+                  value={txAcct}
+                  onChange={(e) => setTxAcct(e.target.value as any)}
+                  className="flex-1 rounded-lg border border-app bg-[var(--surface-raised)] px-2 py-2 text-[12px] text-primary outline-none focus:border-[var(--accent)]/50"
+                >
+                  {ACCOUNTS.map((a) => <option key={a} value={a}>{a}</option>)}
+                </select>
+                <input
+                  type="date"
+                  className="rounded-lg border border-app bg-[var(--surface-raised)] px-2 py-2 text-[12px] text-primary outline-none focus:border-[var(--accent)]/50"
+                  value={txDate}
+                  onChange={(e) => setTxDate(e.target.value)}
+                />
+              </div>
+              <button
+                onClick={addTransaction}
+                disabled={txSaving || !txAmt || !txCat}
+                className="w-full rounded-lg bg-[var(--accent)] px-4 py-2 text-xs font-semibold text-[var(--accent-fg)] shadow-sm transition hover:bg-[var(--accent-hover)] disabled:opacity-40"
+              >
+                {txSaving ? "Saving…" : `Log ${txSign === "+" ? "Income" : "Expense"}`}
+              </button>
+              {txError && <p className="text-[11px] text-red-400">{txError}</p>}
+            </div>
+          </div>
+
+          {/* Account balances */}
+          {accountRows.length > 0 && (
+            <div className="rounded-2xl border border-app bg-surface p-5 shadow-sm">
+              <h2 className="mb-3 text-sm font-semibold text-primary">Account Balances</h2>
+              <ul className="space-y-3">
+                {accountRows.map(({ acc, savingsAmt, net, balance }) => (
+                  <li key={acc}>
+                    <div className="flex items-center justify-between text-[12px]">
+                      <span className="font-medium text-primary">{acc}</span>
+                      <span className={`font-bold ${balance >= 0 ? "text-emerald-400" : "text-red-400"}`}>
+                        {fmtAmt(balance)}
+                      </span>
+                    </div>
+                    <div className="mt-0.5 text-[10px] text-muted">
+                      {savingsAmt !== null && `Start: ${fmtAmt(savingsAmt)}`}
+                      {savingsAmt !== null && net !== 0 && "  ·  "}
+                      {net !== 0 && `Flow: ${fmtAmt(net, true)}`}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+
+        {/* ── Right column ── */}
+        <div className="space-y-4">
+
+          {/* Expense breakdown */}
+          {!loading && expenseByCategory.length > 0 && (
+            <div className="rounded-2xl border border-app bg-surface p-5 shadow-sm">
+              <h2 className="mb-4 text-sm font-semibold text-primary">Expenses by Category</h2>
+              <ul className="space-y-3">
+                {expenseByCategory.map(({ cat, amount }) => {
+                  const pct = Math.round((amount / maxExpense) * 100);
+                  return (
+                    <li key={cat}>
+                      <div className="mb-1 flex items-center justify-between">
+                        <span className={`text-[12px] font-medium ${catColor(cat)}`}>@{cat}</span>
+                        <span className="text-[12px] font-semibold text-red-400">{fmtAmt(amount)}</span>
+                      </div>
+                      <div className="h-1.5 w-full overflow-hidden rounded-full bg-[var(--surface-raised)]">
+                        <div
+                          className="h-full rounded-full bg-red-500/60 transition-all"
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
+
+          {/* Income breakdown */}
+          {!loading && incomeByCategory.length > 0 && (
+            <div className="rounded-2xl border border-app bg-surface p-5 shadow-sm">
+              <h2 className="mb-4 text-sm font-semibold text-primary">Income by Category</h2>
+              <ul className="space-y-2">
+                {incomeByCategory.map(({ cat, amount }) => (
+                  <li key={cat} className="flex items-center justify-between text-[12px]">
+                    <span className={`font-medium ${catColor(cat)}`}>@{cat}</span>
+                    <span className="font-semibold text-emerald-400">{fmtAmt(amount)}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* Transaction list */}
+          <div className="rounded-2xl border border-app bg-surface shadow-sm">
+            <div className="border-b border-subtle px-5 py-4 flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-primary">Transactions</h2>
+              <span className="text-[11px] text-muted">{transactions.length} total</span>
+            </div>
+
+            {loading ? (
+              <div className="flex justify-center py-16">
+                <span className="spinner" />
+              </div>
+            ) : transactions.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-20 text-faint">
+                <div className="mb-2 text-3xl">$</div>
+                <div className="text-sm">No transactions yet</div>
+                <div className="mt-1 text-xs text-muted">Use the form or send BM: via Telegram</div>
+              </div>
+            ) : (
+              <ul>
+                {transactions.map((tx, i) => (
+                  <li
+                    key={tx.id}
+                    className={`animate-item flex items-center gap-3 px-5 py-3.5 ${i > 0 ? "border-t border-subtle" : ""}`}
+                    style={{ animationDelay: `${i * 10}ms` }}
+                  >
+                    {/* Sign indicator */}
+                    <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-[11px] font-bold ${
+                      Number(tx.amount) > 0
+                        ? "bg-emerald-500/15 text-emerald-400"
+                        : "bg-red-500/15 text-red-400"
+                    }`}>
+                      {Number(tx.amount) > 0 ? "+" : "−"}
+                    </span>
+                    {/* Content */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-baseline gap-1.5 flex-wrap">
+                        <span className={`text-[11px] font-semibold ${catColor(tx.category)}`}>@{tx.category}</span>
+                        {tx.description && (
+                          <span className="truncate text-[12px] text-primary">{tx.description}</span>
+                        )}
+                      </div>
+                      <div className="mt-0.5 flex items-center gap-2 text-[10px] text-muted">
+                        <span>{tx.date}</span>
+                        <span>·</span>
+                        <span>{tx.account}</span>
+                        {tx.source === "telegram" && <span>· via TG</span>}
+                      </div>
+                    </div>
+                    {/* Amount */}
+                    <span className={`shrink-0 text-[14px] font-bold ${
+                      Number(tx.amount) > 0 ? "text-emerald-400" : "text-red-400"
+                    }`}>
+                      {fmtAmt(Number(tx.amount), true)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
