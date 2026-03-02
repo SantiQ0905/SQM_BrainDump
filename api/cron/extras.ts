@@ -28,6 +28,15 @@ function ymdInTZ(d: Date, tz: string): string {
   return `${y}-${m}-${day}`;
 }
 
+function ymInTZ(d: Date, tz: string): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: tz, year: "numeric", month: "2-digit",
+  }).formatToParts(d);
+  const y = parts.find((p) => p.type === "year")?.value ?? "1970";
+  const m = parts.find((p) => p.type === "month")?.value ?? "01";
+  return `${y}-${m}`;
+}
+
 function getLocalHour(tz: string): number {
   const parts = new Intl.DateTimeFormat("en-US", {
     timeZone: tz, hour: "numeric", hour12: false,
@@ -132,12 +141,13 @@ async function handleCheckin(req: any, res: any, supabase: any) {
   }
 
   const today = ymdInTZ(new Date(), TZ);
+  const thisMonth = ymInTZ(new Date(), TZ); // YYYY-MM
   const chatIds = await getChatIds(supabase);
   if (!chatIds.length) return json(res, 200, { ok: true, msg: "No chats" });
 
   const messages: string[] = [];
 
-  // Habits
+  // Habits (monthly)
   const { data: habits } = await supabase
     .from("habit_definitions").select("id, name, sort_order")
     .eq("active", true).order("sort_order", { ascending: true });
@@ -147,18 +157,19 @@ async function handleCheckin(req: any, res: any, supabase: any) {
     const { data: existingLogs } = await supabase
       .from("lines").select("id, parsed").eq("bucket", "habits")
       .order("created_at", { ascending: false }).limit(10);
-    const alreadyLogged = (existingLogs ?? []).some((r: any) => r.parsed?.date === today);
+    const alreadyLogged = (existingLogs ?? []).some((r: any) => r.parsed?.date === thisMonth);
 
     if (!alreadyLogged) {
       messages.push([
-        `Habit Check-in (${today}):`,
+        `Monthly Habit Check-in (${thisMonth}):`,
         activeHabits.map((h: any, i: number) => `${i + 1}. ${h.name}`).join("\n"),
         "",
+        "Which habits did you complete this month?",
         "Reply with: HT: 1-YES, 2-NO, 3-YES...",
         "(or: HT: 1 3 5  to mark those as YES, rest as NO)",
       ].join("\n"));
     } else {
-      messages.push("Habits already logged for today ✓");
+      messages.push(`Monthly habits already logged for ${thisMonth} ✓`);
     }
   }
 

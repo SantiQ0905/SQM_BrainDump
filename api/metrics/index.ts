@@ -30,6 +30,21 @@ function addDays(date: Date, days: number) {
   return d;
 }
 
+function ymInTZ(d: Date, tz: string): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: tz, year: "numeric", month: "2-digit",
+  }).formatToParts(d);
+  const y = parts.find((p) => p.type === "year")?.value ?? "1970";
+  const m = parts.find((p) => p.type === "month")?.value ?? "01";
+  return `${y}-${m}`;
+}
+
+function prevMonth(ym: string): string {
+  const [y, m] = ym.split("-").map(Number);
+  const d = new Date(y, m - 2, 1); // month is 0-indexed; m-2 = previous month
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
 /** Count consecutive logged days going backwards from today (or yesterday if today missing). */
 function computeStreak(logDates: string[], today: string): number {
   if (!logDates.length) return 0;
@@ -54,6 +69,19 @@ function computeStreak(logDates: string[], today: string): number {
   return streak;
 }
 
+/** Count consecutive months with habit logs, going backwards from this month. */
+function computeMonthlyStreak(logMonths: string[], thisMonth: string): number {
+  if (!logMonths.length) return 0;
+  const monthSet = new Set(logMonths);
+  let streak = 0;
+  let cursor = thisMonth;
+  while (monthSet.has(cursor)) {
+    streak++;
+    cursor = prevMonth(cursor);
+  }
+  return streak;
+}
+
 export default async function handler(req: any, res: any) {
   try {
     if (req.method !== "GET") {
@@ -72,6 +100,7 @@ export default async function handler(req: any, res: any) {
     });
 
     const today = ymdInTZ(new Date(), TZ);
+    const thisMonth = ymInTZ(new Date(), TZ);
 
     // Fetch habit definitions (active ones)
     const [habitsResult, habitLogsResult, moodLogsResult, taskLogsResult] = await Promise.all([
@@ -101,15 +130,15 @@ export default async function handler(req: any, res: any) {
     const moodLogs = moodLogsResult.data ?? [];
     const taskRows = taskLogsResult.data ?? [];
 
-    // ── Habit streak ──────────────────────────────────────────────
-    const habitLogDates = habitLogs
+    // ── Habit streak (monthly) ─────────────────────────────────────
+    const habitLogMonths = habitLogs
       .map((r: any) => r.parsed?.date as string)
       .filter(Boolean);
-    const habitStreak = computeStreak(habitLogDates, today);
+    const habitStreak = computeMonthlyStreak(habitLogMonths, thisMonth);
 
-    // Today's habit completion (if logged)
-    const todayHabitLog = habitLogs.find((r: any) => r.parsed?.date === today);
-    const todayResults = todayHabitLog?.parsed?.results ?? {};
+    // This month's habit completion (if logged)
+    const thisMonthHabitLog = habitLogs.find((r: any) => r.parsed?.date === thisMonth);
+    const todayResults = thisMonthHabitLog?.parsed?.results ?? {};
     const todayHabitsDone = activeHabits.filter((h: any) => todayResults[h.id] === true).length;
     const todayHabitsTotal = activeHabits.length;
 
@@ -143,7 +172,8 @@ export default async function handler(req: any, res: any) {
     const last14: Array<{ date: string; habitsDone: number; habitsTotal: number; mood: number | null; tasksDone: number }> = [];
     for (let i = 0; i < 14; i++) {
       const d = ymdInTZ(addDays(new Date(), -i), TZ);
-      const hLog = habitLogs.find((r: any) => r.parsed?.date === d);
+      const dMonth = ymInTZ(addDays(new Date(), -i), TZ);
+      const hLog = habitLogs.find((r: any) => r.parsed?.date === dMonth); // monthly log
       const mLog = moodLogs.find((r: any) => r.parsed?.date === d);
       const dayResults = hLog?.parsed?.results ?? {};
       const dayHabitsDone = activeHabits.filter((h: any) => dayResults[h.id] === true).length;

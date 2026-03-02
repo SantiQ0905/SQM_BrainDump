@@ -4,10 +4,13 @@ import type { HabitDefinition, HabitLog } from "../../lib/api";
 
 const TZ = "America/Monterrey";
 
-function todayYMD(): string {
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: TZ, year: "numeric", month: "2-digit", day: "2-digit",
-  }).format(new Date());
+function thisMonthYM(): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: TZ, year: "numeric", month: "2-digit",
+  }).formatToParts(new Date());
+  const y = parts.find((p) => p.type === "year")?.value ?? "1970";
+  const m = parts.find((p) => p.type === "month")?.value ?? "01";
+  return `${y}-${m}`;
 }
 
 export function HabitTrackerPage() {
@@ -20,7 +23,7 @@ export function HabitTrackerPage() {
   const [addingHabit, setAddingHabit] = useState(false);
   const [todayChecks, setTodayChecks] = useState<Record<string, boolean>>({});
 
-  const today = todayYMD();
+  const today = thisMonthYM();
 
   async function refresh() {
     setLoading(true);
@@ -107,12 +110,12 @@ export function HabitTrackerPage() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-primary">Habit Tracker</h1>
           <p className="mt-1 text-sm text-muted">
-            Daily habits — checked every night at 10 PM via Telegram.
+            Monthly habits — log once per month via the app or Telegram (HT: ...).
           </p>
         </div>
         {!loading && activeHabits.length > 0 && (
           <span className="rounded-full bg-[var(--surface-raised)] border border-app px-3 py-1 text-xs font-medium text-secondary">
-            {todayDone}/{activeHabits.length} today
+            {todayDone}/{activeHabits.length} this month
           </span>
         )}
       </div>
@@ -123,7 +126,7 @@ export function HabitTrackerPage() {
           {/* Today's check-in */}
           <div className="rounded-2xl border border-app bg-surface p-5 shadow-sm transition-colors">
             <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-primary">Today — {today}</h2>
+              <h2 className="text-sm font-semibold text-primary">This Month — {today}</h2>
               {todayLog && (
                 <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-semibold text-emerald-400">
                   Logged ✓
@@ -173,7 +176,7 @@ export function HabitTrackerPage() {
                 disabled={saving}
                 className="mt-5 w-full rounded-lg bg-[var(--accent)] px-4 py-2 text-xs font-semibold text-[var(--accent-fg)] shadow-sm transition-all hover:bg-[var(--accent-hover)] active:scale-[0.97] disabled:opacity-40"
               >
-                {saving ? "Saving…" : "Log Today's Habits"}
+                {saving ? "Saving…" : "Log This Month's Habits"}
               </button>
             )}
 
