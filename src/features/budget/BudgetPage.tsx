@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, ACCOUNTS } from "../../lib/api";
-import type { BudgetData, BudgetTransaction, BudgetSaving } from "../../lib/api";
+import type { BudgetData } from "../../lib/api";
 
 const TZ = "America/Monterrey";
 
