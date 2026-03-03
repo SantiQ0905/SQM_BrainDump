@@ -3,6 +3,10 @@ import { createClient } from "@supabase/supabase-js";
 const TZ = "America/Monterrey";
 const VALID_ACCOUNTS = ["AMEX", "NUCredit", "NUDebit", "ScotiabankDebit"];
 
+function normalizeAccount(raw: string): string | null {
+  return VALID_ACCOUNTS.find((a) => a.toLowerCase() === raw.toLowerCase()) ?? null;
+}
+
 function getEnv(name: string): string {
   const v = process.env[name];
   if (!v) throw new Error(`Missing env var: ${name}`);
@@ -116,6 +120,15 @@ export default async function handler(req: any, res: any) {
     if (req.method === "POST") {
       const body = req.body ?? {};
 
+      // ── Delete transaction ────────────────────────────────────────
+      if (String(body.action ?? "") === "delete") {
+        const id = String(body.id ?? "");
+        if (!id) return json(res, 400, { error: "id required" });
+        const { error } = await supabase.from("budget_transactions").delete().eq("id", id);
+        if (error) return json(res, 500, { error: error.message });
+        return json(res, 200, { ok: true });
+      }
+
       // ── Set monthly saving (formerly /api/budget/savings POST) ────
       if (String(body.action ?? "") === "set-savings") {
         const month = (body.month as string) || ymInTZ(new Date(), TZ);
@@ -135,7 +148,8 @@ export default async function handler(req: any, res: any) {
       const amount = Number(body.amount);
       const category = String(body.category ?? "general").toLowerCase().replace(/^@/, "");
       const description = String(body.description ?? "").trim();
-      const account = String(body.account ?? "").trim();
+      const rawAccount = String(body.account ?? "").trim().replace(/^#/, "");
+      const account = normalizeAccount(rawAccount);
       const date = (body.date as string) || ymdInTZ(new Date(), TZ);
       const source = (body.source as string) || "web";
       const telegram_chat_id = body.telegram_chat_id as string | undefined;
@@ -144,7 +158,9 @@ export default async function handler(req: any, res: any) {
         return json(res, 400, { error: "amount required and must be non-zero" });
       }
       if (!account) {
-        return json(res, 400, { error: "account required" });
+        return json(res, 400, {
+          error: `unknown account "${rawAccount}". Valid: ${VALID_ACCOUNTS.join(", ")}`,
+        });
       }
 
       const sign = amount > 0 ? "+" : "-";

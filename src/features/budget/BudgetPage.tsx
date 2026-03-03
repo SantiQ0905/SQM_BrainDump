@@ -132,6 +132,15 @@ export function BudgetPage() {
     }
   }
 
+  async function deleteTransaction(id: string) {
+    try {
+      await api.deleteTransaction(id);
+      await refresh();
+    } catch {
+      // silent — row stays in list on failure
+    }
+  }
+
   const summary = data?.summary;
   const savings = data?.savings ?? [];
   const transactions = data?.transactions ?? [];
@@ -288,7 +297,7 @@ export function BudgetPage() {
                 className="w-full rounded-lg border border-app bg-[var(--surface-raised)] px-3 py-2 text-[13px] text-primary outline-none placeholder:text-faint focus:border-[var(--accent)]/50"
                 placeholder="@category (food, health, earnings…)"
                 value={txCat}
-                onChange={(e) => setTxCat(e.target.value)}
+                onChange={(e) => setTxCat(e.target.value.toLowerCase())}
               />
               {/* Description */}
               <input
@@ -409,7 +418,10 @@ export function BudgetPage() {
               <div className="flex flex-col items-center justify-center py-20 text-faint">
                 <div className="mb-2 text-3xl">$</div>
                 <div className="text-sm">No transactions yet</div>
-                <div className="mt-1 text-xs text-muted">Use the form or send BM: via Telegram</div>
+                {savings.length === 0
+                  ? <div className="mt-1 text-xs text-muted">Start by setting your savings balance on the left, then log your first transaction.</div>
+                  : <div className="mt-1 text-xs text-muted">Use the form on the left or send <span className="font-mono">BM: -$100 @food #NUDebit</span> via Telegram.</div>
+                }
               </div>
             ) : (
               <ul>
@@ -448,6 +460,12 @@ export function BudgetPage() {
                     }`}>
                       {fmtAmt(Number(tx.amount), true)}
                     </span>
+                    {/* Delete */}
+                    <button
+                      onClick={() => deleteTransaction(tx.id)}
+                      className="ml-1 shrink-0 rounded p-1 text-faint transition hover:text-red-400"
+                      title="Delete"
+                    >×</button>
                   </li>
                 ))}
               </ul>

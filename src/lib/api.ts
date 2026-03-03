@@ -228,5 +228,11 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ action: "set-savings", account, amount, month }),
     }),
+
+  deleteTransaction: (id: string) =>
+    request<{ ok: boolean }>(`/api/budget`, {
+      method: "POST",
+      body: JSON.stringify({ action: "delete", id }),
+    }),
 };
 

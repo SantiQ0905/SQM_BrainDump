@@ -55,18 +55,29 @@ async function tgSend(chatId: string, text: string) {
 }
 
 async function getChatIds(supabase: any): Promise<string[]> {
-  const { data } = await supabase
-    .from("lines")
-    .select("parsed")
-    .eq("source", "telegram")
-    .order("created_at", { ascending: false })
-    .limit(500);
-  const ids: string[] = [];
+  // Primary: dedicated table, populated by webhook on every message
+  const { data: chats } = await supabase
+    .from("telegram_chats")
+    .select("chat_id");
+  if (chats?.length) return chats.map((r: any) => String(r.chat_id));
+
+  // Fallback: scan lines + budget_transactions (catches users before table existed)
   const seen = new Set<string>();
-  for (const r of data ?? []) {
-    const cid = r?.parsed?.telegram_chat_id;
-    if (cid && !seen.has(String(cid))) { seen.add(String(cid)); ids.push(String(cid)); }
-  }
+  const ids: string[] = [];
+  const collect = (cid: any) => {
+    const s = String(cid);
+    if (cid && !seen.has(s)) { seen.add(s); ids.push(s); }
+  };
+
+  const [linesRes, budgetRes] = await Promise.all([
+    supabase.from("lines").select("parsed").eq("source", "telegram")
+      .order("created_at", { ascending: false }).limit(500),
+    supabase.from("budget_transactions").select("telegram_chat_id")
+      .not("telegram_chat_id", "is", null)
+      .order("created_at", { ascending: false }).limit(200),
+  ]);
+  for (const r of linesRes.data ?? [])  collect(r?.parsed?.telegram_chat_id);
+  for (const r of budgetRes.data ?? []) collect(r?.telegram_chat_id);
   return ids;
 }
 

@@ -86,6 +86,10 @@ function splitIntoLines(text: string): string[] {
    ────────────────────────────────────────────────────────────── */
 
 const TZ = "America/Monterrey";
+const VALID_ACCOUNTS = ["AMEX", "NUCredit", "NUDebit", "ScotiabankDebit"];
+function normalizeAccount(raw: string): string | null {
+  return VALID_ACCOUNTS.find((a) => a.toLowerCase() === raw.toLowerCase()) ?? null;
+}
 
 function ymdInTZ(d: Date, tz: string): string {
   // returns YYYY-MM-DD in tz
@@ -1111,14 +1115,18 @@ async function handleBudgetLog(
   const categoryMatch = rest.match(/@([a-zA-Z0-9_-]+)/);
   const accountMatch = rest.match(/#([a-zA-Z0-9_-]+)/);
   const category = categoryMatch?.[1]?.toLowerCase() ?? "general";
-  const account = accountMatch?.[1] ?? "";
+  const rawAccount = accountMatch?.[1] ?? "";
+  const account = normalizeAccount(rawAccount);
   const description = rest
     .replace(/@[a-zA-Z0-9_-]+/, "")
     .replace(/#[a-zA-Z0-9_-]+/, "")
     .trim();
 
   if (!account) {
-    await tgSendMessage(chatId, "Account required. Use #AccountName (e.g. #AMEX, #NUDebit, #ScotiabankDebit)");
+    const msg2 = rawAccount
+      ? `Unknown account "${rawAccount}". Valid: ${VALID_ACCOUNTS.join(", ")}`
+      : `Account required. Use #AccountName (e.g. #AMEX, #NUDebit, #ScotiabankDebit)`;
+    await tgSendMessage(chatId, msg2);
     return true;
   }
 
@@ -1195,6 +1203,13 @@ export default async function handler(req: any, res: any) {
 
     const userId = msg?.from?.id?.toString?.() ?? null;
     const chatIdStr = chatId?.toString?.() ?? null;
+
+    // Register chat for reliable notification delivery (fire-and-forget)
+    if (chatIdStr) {
+      supabase.from("telegram_chats")
+        .upsert({ chat_id: chatIdStr }, { onConflict: "chat_id" })
+        .then(() => {});
+    }
 
     // Commands
     if (text.trim().startsWith("/")) {

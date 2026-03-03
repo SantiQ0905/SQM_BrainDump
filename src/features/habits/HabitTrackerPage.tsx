@@ -36,7 +36,7 @@ export function HabitTrackerPage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await api.habitLog({ days: 30 });
+      const res = await api.habitLog({ days: 90 });
       setHabits(res.habits);
       setLogs(res.logs);
 
@@ -266,6 +266,9 @@ export function HabitTrackerPage() {
                 <h2 className="text-sm font-semibold text-primary">This Month — {thisMonth}</h2>
                 <span className="text-[11px] text-muted">{daysLoggedThisMonth} day{daysLoggedThisMonth !== 1 ? "s" : ""} logged</span>
               </div>
+              {daysLoggedThisMonth === 0 ? (
+                <p className="text-[12px] text-faint">No logs yet this month. Check in daily to track progress.</p>
+              ) : (
               <ul className="space-y-3">
                 {monthlyProgress.map(({ habit, done, pct }) => (
                   <li key={habit.id}>
@@ -288,6 +291,7 @@ export function HabitTrackerPage() {
                   </li>
                 ))}
               </ul>
+              )}
             </div>
           )}
 

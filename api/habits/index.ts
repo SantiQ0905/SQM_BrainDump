@@ -43,11 +43,15 @@ export default async function handler(req: any, res: any) {
     if (req.method === "GET") {
       // ?logs=true → return habits + log history (formerly /api/habits/log)
       if (req.query?.logs === "true") {
-        const days = Math.min(Number(req.query?.days ?? 30), 90);
+        const days = Math.min(Number(req.query?.days ?? 90), 365);
+        const since = new Date();
+        since.setDate(since.getDate() - days);
         const [habitsResult, logsResult] = await Promise.all([
           supabase.from("habit_definitions").select("*").order("sort_order", { ascending: true }),
           supabase.from("lines").select("id, created_at, parsed")
-            .eq("bucket", "habits").order("created_at", { ascending: false }).limit(days),
+            .eq("bucket", "habits")
+            .gte("created_at", since.toISOString())
+            .order("created_at", { ascending: false }),
         ]);
         if (habitsResult.error) return json(res, 500, { error: habitsResult.error.message });
         if (logsResult.error)   return json(res, 500, { error: logsResult.error.message });
