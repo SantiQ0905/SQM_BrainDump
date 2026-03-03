@@ -91,6 +91,21 @@ function normalizeAccount(raw: string): string | null {
   return VALID_ACCOUNTS.find((a) => a.toLowerCase() === raw.toLowerCase()) ?? null;
 }
 
+const CREDIT_CARDS: Record<string, { limit: number; cutDay: number }> = {
+  AMEX:     { limit: 10000, cutDay: 4 },
+  NUCredit: { limit:  6000, cutDay: 6 },
+};
+
+function nextCutInfo(cutDay: number, today: string): { date: string; daysAway: number } {
+  const [y, m, d] = today.split("-").map(Number);
+  let cy = y, cm = m;
+  if (d > cutDay) { cm++; if (cm > 12) { cm = 1; cy++; } }
+  const daysAway = Math.round(
+    (new Date(cy, cm - 1, cutDay).getTime() - new Date(y, m - 1, d).getTime()) / 86400000
+  );
+  return { date: `${cy}-${String(cm).padStart(2, "0")}-${String(cutDay).padStart(2, "0")}`, daysAway };
+}
+
 function ymdInTZ(d: Date, tz: string): string {
   // returns YYYY-MM-DD in tz
   const parts = new Intl.DateTimeFormat("en-CA", {
@@ -899,10 +914,15 @@ async function handleCommand(chatId: string | number, text: string, supabase: an
     const txs: any[] = txRows ?? [];
     const savings: any[] = savRows ?? [];
 
+    const today = ymdInTZ(new Date(), TZ);
     const totalIncome = txs.filter((t) => t.amount > 0).reduce((s, t) => s + Number(t.amount), 0);
     const totalExpenses = txs.filter((t) => t.amount < 0).reduce((s, t) => s + Math.abs(Number(t.amount)), 0);
-    const netFlow = totalIncome - totalExpenses;
-    const totalSavings = savings.reduce((s, r) => s + Number(r.amount), 0);
+    const cashNetFlow = txs
+      .filter((t) => !(t.account in CREDIT_CARDS))
+      .reduce((s, t) => s + Number(t.amount), 0);
+    const totalSavings = savings
+      .filter((s: any) => !(s.account in CREDIT_CARDS))
+      .reduce((s: number, r: any) => s + Number(r.amount), 0);
 
     // By category (expenses only, top 5)
     const catMap: Record<string, number> = {};
@@ -914,23 +934,40 @@ async function handleCommand(chatId: string | number, text: string, supabase: an
       .slice(0, 5)
       .map(([cat, amt]) => `  @${cat}: $${amt.toFixed(2)}`);
 
-    const fmt = (n: number) => `$${n.toFixed(2)}`;
+    const fmt = (n: number) => `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
     const msgLines = [
       `Cashflow — ${thisMonth}:`,
       ``,
-      `Savings (start): ${fmt(totalSavings)}`,
-      `Income:          ${fmt(totalIncome)}`,
-      `Expenses:        ${fmt(totalExpenses)}`,
-      `Net:             ${netFlow >= 0 ? "+" : ""}${fmt(netFlow)}`,
+      `Savings:   ${fmt(totalSavings)}`,
+      `Income:    ${fmt(totalIncome)}`,
+      `Expenses:  ${fmt(totalExpenses)}`,
+      `Cash net:  ${cashNetFlow >= 0 ? "+" : ""}${fmt(cashNetFlow)}`,
     ];
 
-    if (savings.length > 0) {
+    const debitSavings = savings.filter((s: any) => !(s.account in CREDIT_CARDS));
+    if (debitSavings.length > 0) {
       msgLines.push(``, `Accounts:`);
-      for (const s of savings) {
-        const accTxs = txs.filter((t) => t.account === s.account);
-        const accNet = accTxs.reduce((sum, t) => sum + Number(t.amount), 0);
+      for (const s of debitSavings) {
+        const accTxs = txs.filter((t: any) => t.account === s.account);
+        const accNet = accTxs.reduce((sum: number, t: any) => sum + Number(t.amount), 0);
         msgLines.push(`  ${s.account}: ${fmt(Number(s.amount) + accNet)} (${accNet >= 0 ? "+" : ""}${fmt(accNet)})`);
       }
+    }
+
+    // Credit card utilization
+    const ccLines: string[] = [];
+    for (const [account, { limit, cutDay }] of Object.entries(CREDIT_CARDS)) {
+      const spent = txs
+        .filter((t: any) => t.account === account && Number(t.amount) < 0)
+        .reduce((s: number, t: any) => s + Math.abs(Number(t.amount)), 0);
+      const pct = limit > 0 ? Math.round((spent / limit) * 100) : 0;
+      const { date: cutDate, daysAway } = nextCutInfo(cutDay, today);
+      const cutFmt = new Date(cutDate + "T12:00:00").toLocaleString("en-US", { month: "short", day: "numeric" });
+      ccLines.push(`  ${account}: ${fmt(spent)}/${fmt(limit)} (${pct}%) — cuts ${cutFmt} (${daysAway}d)`);
+    }
+    if (ccLines.length > 0) {
+      msgLines.push(``, `Credit cards:`);
+      msgLines.push(...ccLines);
     }
 
     if (topCats.length > 0) {

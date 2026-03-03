@@ -2,6 +2,12 @@ import { useEffect, useState } from "react";
 import { api, ACCOUNTS } from "../../lib/api";
 import type { BudgetData } from "../../lib/api";
 
+const CREDIT_CARDS: Record<string, { limit: number; cutDay: number }> = {
+  AMEX:     { limit: 10000, cutDay: 4 },
+  NUCredit: { limit:  6000, cutDay: 6 },
+};
+const DEBIT_ACCOUNTS = ACCOUNTS.filter((a) => !(a in CREDIT_CARDS));
+
 const TZ = "America/Monterrey";
 
 function todayYMD(): string {
@@ -73,7 +79,7 @@ export function BudgetPage() {
   const [txError, setTxError] = useState<string | null>(null);
 
   // Monthly savings form
-  const [savAcct, setSavAcct]   = useState(ACCOUNTS[0]);
+  const [savAcct, setSavAcct]   = useState(DEBIT_ACCOUNTS[0]);
   const [savAmt, setSavAmt]     = useState("");
   const [savSaving, setSavSaving] = useState(false);
   const [savError, setSavError] = useState<string | null>(null);
@@ -158,8 +164,8 @@ export function BudgetPage() {
 
   const maxExpense = expenseByCategory[0]?.amount ?? 1;
 
-  // Per-account: savings + net flow
-  const accountRows = ACCOUNTS.map((acc) => {
+  // Per-account: savings + net flow (debit accounts only)
+  const accountRows = DEBIT_ACCOUNTS.map((acc) => {
     const sav = savings.find((s) => s.account === acc);
     const accTxs = transactions.filter((t) => t.account === acc);
     const net = accTxs.reduce((s, t) => s + Number(t.amount), 0);
@@ -206,10 +212,10 @@ export function BudgetPage() {
           {!loading && summary && (
             <div className="grid grid-cols-2 gap-3">
               {[
-                { label: "Income",   value: summary.totalIncome,   color: "text-emerald-400" },
-                { label: "Expenses", value: summary.totalExpenses, color: "text-red-400" },
-                { label: "Net flow", value: summary.netFlow,       color: summary.netFlow >= 0 ? "text-emerald-400" : "text-red-400", signed: true },
-                { label: "Savings",  value: data!.totalSavings,    color: "text-sky-400" },
+                { label: "Income",   value: summary.totalIncome,    color: "text-emerald-400" },
+                { label: "Expenses", value: summary.totalExpenses,  color: "text-red-400" },
+                { label: "Cash Net", value: summary.cashNetFlow,    color: summary.cashNetFlow >= 0 ? "text-emerald-400" : "text-red-400", signed: true },
+                { label: "Savings",  value: data!.totalSavings,     color: "text-sky-400" },
               ].map(({ label, value, color, signed }) => (
                 <div key={label} className="rounded-2xl border border-app bg-surface p-4 shadow-sm">
                   <p className="text-[10px] font-semibold uppercase tracking-wider text-muted">{label}</p>
@@ -241,7 +247,7 @@ export function BudgetPage() {
                 onChange={(e) => setSavAcct(e.target.value as any)}
                 className="rounded-lg border border-app bg-[var(--surface-raised)] px-2 py-2 text-[12px] text-primary outline-none focus:border-[var(--accent)]/50"
               >
-                {ACCOUNTS.map((a) => <option key={a} value={a}>{a}</option>)}
+                {DEBIT_ACCOUNTS.map((a) => <option key={a} value={a}>{a}</option>)}
               </select>
               <input
                 type="number"
@@ -262,6 +268,36 @@ export function BudgetPage() {
             </div>
             {savError && <p className="text-[11px] text-red-400">{savError}</p>}
           </div>
+
+          {/* Credit Cards */}
+          {!loading && data && data.creditCards.length > 0 && (
+            <div className="rounded-2xl border border-app bg-surface p-5 shadow-sm">
+              <h2 className="mb-4 text-sm font-semibold text-primary">Credit Cards</h2>
+              <ul className="space-y-4">
+                {data.creditCards.map((cc) => {
+                  const pct = cc.limit > 0 ? Math.round((cc.spent / cc.limit) * 100) : 0;
+                  const barColor = pct >= 80 ? "bg-red-500" : pct >= 60 ? "bg-amber-500" : "bg-sky-500";
+                  const textColor = pct >= 80 ? "text-red-400" : pct >= 60 ? "text-amber-400" : "text-sky-400";
+                  const cutLabel = new Date(cc.nextCutDate + "T12:00:00").toLocaleString("en-US", { month: "short", day: "numeric" });
+                  return (
+                    <li key={cc.account}>
+                      <div className="mb-1 flex items-center justify-between">
+                        <span className="text-[12px] font-semibold text-primary">{cc.account}</span>
+                        <span className={`text-[11px] font-bold ${textColor}`}>{pct}% used</span>
+                      </div>
+                      <div className="h-2 w-full overflow-hidden rounded-full bg-[var(--surface-raised)]">
+                        <div className={`h-full rounded-full transition-all ${barColor}`} style={{ width: `${Math.min(pct, 100)}%` }} />
+                      </div>
+                      <div className="mt-1.5 flex items-center justify-between text-[10px] text-muted">
+                        <span>{fmtAmt(cc.spent)} spent · {fmtAmt(cc.available)} left of {fmtAmt(cc.limit)}</span>
+                        <span>Cut {cutLabel} ({cc.daysUntilCut}d)</span>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
 
           {/* Add transaction */}
           <div className="rounded-2xl border border-app bg-surface p-5 shadow-sm">

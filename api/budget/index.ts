@@ -3,6 +3,21 @@ import { createClient } from "@supabase/supabase-js";
 const TZ = "America/Monterrey";
 const VALID_ACCOUNTS = ["AMEX", "NUCredit", "NUDebit", "ScotiabankDebit"];
 
+const CREDIT_CARDS: Record<string, { limit: number; cutDay: number }> = {
+  AMEX:     { limit: 10000, cutDay: 4 },
+  NUCredit: { limit:  6000, cutDay: 6 },
+};
+
+function nextCutInfo(cutDay: number, today: string): { date: string; daysAway: number } {
+  const [y, m, d] = today.split("-").map(Number);
+  let cy = y, cm = m;
+  if (d > cutDay) { cm++; if (cm > 12) { cm = 1; cy++; } }
+  const daysAway = Math.round(
+    (new Date(cy, cm - 1, cutDay).getTime() - new Date(y, m - 1, d).getTime()) / 86400000
+  );
+  return { date: `${cy}-${String(cm).padStart(2, "0")}-${String(cutDay).padStart(2, "0")}`, daysAway };
+}
+
 function normalizeAccount(raw: string): string | null {
   return VALID_ACCOUNTS.find((a) => a.toLowerCase() === raw.toLowerCase()) ?? null;
 }
@@ -105,15 +120,33 @@ export default async function handler(req: any, res: any) {
         byCategory[t.category] += Number(t.amount);
       }
 
-      // Total savings across accounts
-      const totalSavings = savings.reduce((sum, s) => sum + Number(s.amount), 0);
+      // Credit card utilization
+      const today = ymdInTZ(new Date(), TZ);
+      const creditCards = Object.entries(CREDIT_CARDS).map(([account, { limit, cutDay }]) => {
+        const spent = transactions
+          .filter((t) => t.account === account && Number(t.amount) < 0)
+          .reduce((s, t) => s + Math.abs(Number(t.amount)), 0);
+        const { date: nextCutDate, daysAway: daysUntilCut } = nextCutInfo(cutDay, today);
+        return { account, limit, cutDay, spent, available: limit - spent, nextCutDate, daysUntilCut };
+      });
+
+      // Cash net flow (debit accounts only)
+      const cashNetFlow = transactions
+        .filter((t) => !(t.account in CREDIT_CARDS))
+        .reduce((s, t) => s + Number(t.amount), 0);
+
+      // Total savings (exclude credit card entries — they don't have a starting balance)
+      const totalSavings = savings
+        .filter((s) => !(s.account in CREDIT_CARDS))
+        .reduce((sum, s) => sum + Number(s.amount), 0);
 
       return json(res, 200, {
         month,
         transactions,
         savings,
         totalSavings,
-        summary: { totalIncome, totalExpenses, netFlow, byAccount, byCategory },
+        creditCards,
+        summary: { totalIncome, totalExpenses, netFlow, cashNetFlow, byAccount, byCategory },
       });
     }
 

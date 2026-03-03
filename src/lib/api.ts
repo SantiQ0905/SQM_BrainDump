@@ -117,10 +117,21 @@ export type BudgetSaving = {
   amount: number;
 };
 
+export type CreditCardData = {
+  account: string;
+  limit: number;
+  cutDay: number;
+  spent: number;
+  available: number;
+  nextCutDate: string;
+  daysUntilCut: number;
+};
+
 export type BudgetSummary = {
   totalIncome: number;
   totalExpenses: number;
   netFlow: number;
+  cashNetFlow: number;
   byAccount: Record<string, { income: number; expenses: number; net: number }>;
   byCategory: Record<string, number>;
 };
@@ -130,6 +141,7 @@ export type BudgetData = {
   transactions: BudgetTransaction[];
   savings: BudgetSaving[];
   totalSavings: number;
+  creditCards: CreditCardData[];
   summary: BudgetSummary;
 };
 
