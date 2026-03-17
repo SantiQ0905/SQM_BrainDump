@@ -255,18 +255,18 @@ export const api = {
     }),
 
   verifySetupPin: (pin: string) =>
-    request<{ ok: boolean }>(`/api/budget/config`, {
+    request<{ ok: boolean }>(`/api/budget`, {
       method: "POST",
       body: JSON.stringify({ action: "verify-pin", pin }),
     }),
 
   budgetConfig: (month?: string) => {
-    const q = month ? `?month=${month}` : "";
-    return request<{ month: string; savings: BudgetSaving[] }>(`/api/budget/config${q}`);
+    const q = month ? `?config=1&month=${month}` : "?config=1";
+    return request<{ month: string; savings: BudgetSaving[] }>(`/api/budget${q}`);
   },
 
   setBudgetConfig: (pin: string, month: string, balances: Record<string, number>) =>
-    request<{ ok: boolean; month: string; accounts: number }>(`/api/budget/config`, {
+    request<{ ok: boolean; month: string; accounts: number }>(`/api/budget`, {
       method: "POST",
       body: JSON.stringify({ action: "set-initial", pin, month, balances }),
     }),

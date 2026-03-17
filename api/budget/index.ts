@@ -53,8 +53,9 @@ function ymInTZ(d: Date, tz: string): string {
   return `${y}-${m}`;
 }
 
-// GET /api/budget?month=YYYY-MM  →  transactions + savings + summary for month
-// POST /api/budget               →  add a transaction
+// GET /api/budget?month=YYYY-MM        →  transactions + savings + summary for month
+// GET /api/budget?config=1&month=…     →  savings config for setup page
+// POST /api/budget                     →  add transaction / set-savings / delete / reset / verify-pin / set-initial
 
 export default async function handler(req: any, res: any) {
   try {
@@ -66,6 +67,17 @@ export default async function handler(req: any, res: any) {
     const supabase = createClient(getEnv("SUPABASE_URL"), getEnv("SUPABASE_SECRET_KEY"), {
       auth: { persistSession: false },
     });
+
+    // ── GET /api/budget?config=1 — setup page initial config ───────
+    if (req.method === "GET" && req.query?.config === "1") {
+      const month = (req.query?.month as string) || ymInTZ(new Date(), TZ);
+      const { data, error } = await supabase
+        .from("budget_monthly_savings")
+        .select("*")
+        .eq("month", month);
+      if (error) return json(res, 500, { error: error.message });
+      return json(res, 200, { month, savings: data ?? [] });
+    }
 
     if (req.method === "GET") {
       const month = (req.query?.month as string) || ymInTZ(new Date(), TZ);
@@ -155,6 +167,30 @@ export default async function handler(req: any, res: any) {
 
     if (req.method === "POST") {
       const body = req.body ?? {};
+
+      // ── Verify setup PIN ─────────────────────────────────────────
+      if (String(body.action ?? "") === "verify-pin") {
+        const pin = String(body.pin ?? "");
+        if (pin !== getEnv("BUDGET_SETUP_PIN")) return json(res, 401, { error: "Invalid PIN" });
+        return json(res, 200, { ok: true });
+      }
+
+      // ── Set initial config (bulk savings for all accounts) ────────
+      if (String(body.action ?? "") === "set-initial") {
+        const pin = String(body.pin ?? "");
+        if (pin !== getEnv("BUDGET_SETUP_PIN")) return json(res, 401, { error: "Invalid PIN" });
+        const month = (body.month as string) || ymInTZ(new Date(), TZ);
+        const balances: Record<string, number> = body.balances ?? {};
+        const upserts = Object.entries(balances)
+          .filter(([acc]) => VALID_ACCOUNTS.includes(acc))
+          .map(([account, amount]) => ({ month, account, amount: Number(amount) }));
+        if (upserts.length === 0) return json(res, 400, { error: "No valid accounts provided" });
+        const { error } = await supabase
+          .from("budget_monthly_savings")
+          .upsert(upserts, { onConflict: "month,account" });
+        if (error) return json(res, 500, { error: error.message });
+        return json(res, 200, { ok: true, month, accounts: upserts.length });
+      }
 
       // ── Reset month (delete all transactions + savings) ──────────
       if (String(body.action ?? "") === "reset") {
