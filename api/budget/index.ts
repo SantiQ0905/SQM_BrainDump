@@ -126,8 +126,11 @@ export default async function handler(req: any, res: any) {
         const spent = transactions
           .filter((t) => t.account === account && Number(t.amount) < 0)
           .reduce((s, t) => s + Math.abs(Number(t.amount)), 0);
+        const savingEntry = savings.find((s) => s.account === account);
+        const initialOwed = savingEntry ? Math.abs(Number(savingEntry.amount)) : 0;
+        const totalOwed = initialOwed + spent;
         const { date: nextCutDate, daysAway: daysUntilCut } = nextCutInfo(cutDay, today);
-        return { account, limit, cutDay, spent, available: limit - spent, nextCutDate, daysUntilCut };
+        return { account, limit, cutDay, spent, initialOwed, available: limit - totalOwed, nextCutDate, daysUntilCut };
       });
 
       // Cash net flow (debit accounts only)
@@ -152,6 +155,23 @@ export default async function handler(req: any, res: any) {
 
     if (req.method === "POST") {
       const body = req.body ?? {};
+
+      // ── Reset month (delete all transactions + savings) ──────────
+      if (String(body.action ?? "") === "reset") {
+        const month = (body.month as string) || ymInTZ(new Date(), TZ);
+        const monthStart = `${month}-01`;
+        const [ry, rm] = month.split("-").map(Number);
+        const nextMonthStr = rm === 12
+          ? `${ry + 1}-01-01`
+          : `${ry}-${String(rm + 1).padStart(2, "0")}-01`;
+        const [txDel, savDel] = await Promise.all([
+          supabase.from("budget_transactions").delete().gte("date", monthStart).lt("date", nextMonthStr),
+          supabase.from("budget_monthly_savings").delete().eq("month", month),
+        ]);
+        if (txDel.error) return json(res, 500, { error: txDel.error.message });
+        if (savDel.error) return json(res, 500, { error: savDel.error.message });
+        return json(res, 200, { ok: true });
+      }
 
       // ── Delete transaction ────────────────────────────────────────
       if (String(body.action ?? "") === "delete") {

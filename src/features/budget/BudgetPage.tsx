@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { api, ACCOUNTS } from "../../lib/api";
 import type { BudgetData } from "../../lib/api";
 
@@ -63,10 +64,15 @@ function catColor(cat: string): string {
 }
 
 export function BudgetPage() {
+  const navigate = useNavigate();
   const [month, setMonth] = useState(thisMonthYM());
   const [data, setData] = useState<BudgetData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Reset confirmation state
+  const [resetConfirm, setResetConfirm] = useState(false);
+  const [resetting, setResetting] = useState(false);
 
   // Add transaction form
   const [txSign, setTxSign]   = useState<"+" | "-">("-");
@@ -138,6 +144,20 @@ export function BudgetPage() {
     }
   }
 
+  async function resetMonth() {
+    setResetting(true);
+    setError(null);
+    try {
+      await api.resetBudget(month);
+      setResetConfirm(false);
+      await refresh();
+    } catch (e: any) {
+      setError(e?.message || "Reset failed");
+    } finally {
+      setResetting(false);
+    }
+  }
+
   async function deleteTransaction(id: string) {
     try {
       await api.deleteTransaction(id);
@@ -183,20 +203,55 @@ export function BudgetPage() {
             Cashflow tracker — log income and expenses per account.
           </p>
         </div>
-        {/* Month navigator */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Month navigator */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setMonth(prevMonthYM(month))}
+              className="flex h-8 w-8 items-center justify-center rounded-lg border border-app text-muted transition hover:text-primary hover:bg-[var(--surface-raised)]"
+            >‹</button>
+            <span className="min-w-[140px] text-center text-sm font-semibold text-primary">
+              {monthLabel(month)}
+            </span>
+            <button
+              onClick={() => setMonth(nextMonthYM(month))}
+              disabled={month >= thisMonthYM()}
+              className="flex h-8 w-8 items-center justify-center rounded-lg border border-app text-muted transition hover:text-primary hover:bg-[var(--surface-raised)] disabled:opacity-30"
+            >›</button>
+          </div>
+          {/* Setup link */}
           <button
-            onClick={() => setMonth(prevMonthYM(month))}
-            className="flex h-8 w-8 items-center justify-center rounded-lg border border-app text-muted transition hover:text-primary hover:bg-[var(--surface-raised)]"
-          >‹</button>
-          <span className="min-w-[140px] text-center text-sm font-semibold text-primary">
-            {monthLabel(month)}
-          </span>
-          <button
-            onClick={() => setMonth(nextMonthYM(month))}
-            disabled={month >= thisMonthYM()}
-            className="flex h-8 w-8 items-center justify-center rounded-lg border border-app text-muted transition hover:text-primary hover:bg-[var(--surface-raised)] disabled:opacity-30"
-          >›</button>
+            onClick={() => navigate("/budget/setup")}
+            className="rounded-lg border border-app px-3 py-1.5 text-xs font-medium text-muted transition hover:text-primary hover:bg-[var(--surface-raised)]"
+          >
+            Setup
+          </button>
+          {/* Reset button */}
+          {!resetConfirm ? (
+            <button
+              onClick={() => setResetConfirm(true)}
+              className="rounded-lg border border-red-500/40 px-3 py-1.5 text-xs font-medium text-red-400 transition hover:bg-red-500/10"
+            >
+              Reset
+            </button>
+          ) : (
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-muted">Reset {monthLabel(month)}?</span>
+              <button
+                onClick={resetMonth}
+                disabled={resetting}
+                className="rounded-lg bg-red-500/20 px-3 py-1.5 text-xs font-semibold text-red-400 transition hover:bg-red-500/30 disabled:opacity-40"
+              >
+                {resetting ? "…" : "Yes, reset"}
+              </button>
+              <button
+                onClick={() => setResetConfirm(false)}
+                className="rounded-lg border border-app px-3 py-1.5 text-xs font-medium text-muted transition hover:text-primary"
+              >
+                Cancel
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -275,7 +330,8 @@ export function BudgetPage() {
               <h2 className="mb-4 text-sm font-semibold text-primary">Credit Cards</h2>
               <ul className="space-y-4">
                 {data.creditCards.map((cc) => {
-                  const pct = cc.limit > 0 ? Math.round((cc.spent / cc.limit) * 100) : 0;
+                  const totalOwed = cc.spent + (cc.initialOwed ?? 0);
+                  const pct = cc.limit > 0 ? Math.round((totalOwed / cc.limit) * 100) : 0;
                   const barColor = pct >= 80 ? "bg-red-500" : pct >= 60 ? "bg-amber-500" : "bg-sky-500";
                   const textColor = pct >= 80 ? "text-red-400" : pct >= 60 ? "text-amber-400" : "text-sky-400";
                   const cutLabel = new Date(cc.nextCutDate + "T12:00:00").toLocaleString("en-US", { month: "short", day: "numeric" });
@@ -289,7 +345,10 @@ export function BudgetPage() {
                         <div className={`h-full rounded-full transition-all ${barColor}`} style={{ width: `${Math.min(pct, 100)}%` }} />
                       </div>
                       <div className="mt-1.5 flex items-center justify-between text-[10px] text-muted">
-                        <span>{fmtAmt(cc.spent)} spent · {fmtAmt(cc.available)} left of {fmtAmt(cc.limit)}</span>
+                        <span>
+                          {cc.initialOwed > 0 && <>{fmtAmt(cc.initialOwed)} prev · </>}
+                          {fmtAmt(cc.spent)} this month · {fmtAmt(cc.available)} left of {fmtAmt(cc.limit)}
+                        </span>
                         <span>Cut {cutLabel} ({cc.daysUntilCut}d)</span>
                       </div>
                     </li>

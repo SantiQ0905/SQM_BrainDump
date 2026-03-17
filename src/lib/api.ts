@@ -122,6 +122,7 @@ export type CreditCardData = {
   limit: number;
   cutDay: number;
   spent: number;
+  initialOwed: number;
   available: number;
   nextCutDate: string;
   daysUntilCut: number;
@@ -245,6 +246,29 @@ export const api = {
     request<{ ok: boolean }>(`/api/budget`, {
       method: "POST",
       body: JSON.stringify({ action: "delete", id }),
+    }),
+
+  resetBudget: (month: string) =>
+    request<{ ok: boolean }>(`/api/budget`, {
+      method: "POST",
+      body: JSON.stringify({ action: "reset", month }),
+    }),
+
+  verifySetupPin: (pin: string) =>
+    request<{ ok: boolean }>(`/api/budget/config`, {
+      method: "POST",
+      body: JSON.stringify({ action: "verify-pin", pin }),
+    }),
+
+  budgetConfig: (month?: string) => {
+    const q = month ? `?month=${month}` : "";
+    return request<{ month: string; savings: BudgetSaving[] }>(`/api/budget/config${q}`);
+  },
+
+  setBudgetConfig: (pin: string, month: string, balances: Record<string, number>) =>
+    request<{ ok: boolean; month: string; accounts: number }>(`/api/budget/config`, {
+      method: "POST",
+      body: JSON.stringify({ action: "set-initial", pin, month, balances }),
     }),
 };
 
