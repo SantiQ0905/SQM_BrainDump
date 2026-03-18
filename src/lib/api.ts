@@ -137,12 +137,24 @@ export type BudgetSummary = {
   byCategory: Record<string, number>;
 };
 
+export type BudgetSubscription = {
+  id: string;
+  name: string;
+  amount: number;
+  account: string;
+  category: string;
+  billing_day: number;
+  active: boolean;
+  created_at: string;
+};
+
 export type BudgetData = {
   month: string;
   transactions: BudgetTransaction[];
   savings: BudgetSaving[];
   totalSavings: number;
   creditCards: CreditCardData[];
+  subscriptions: BudgetSubscription[];
   summary: BudgetSummary;
 };
 
@@ -269,6 +281,18 @@ export const api = {
     request<{ ok: boolean; month: string; accounts: number }>(`/api/budget`, {
       method: "POST",
       body: JSON.stringify({ action: "set-initial", pin, month, balances }),
+    }),
+
+  addSubscription: (sub: { name: string; amount: number; account: string; category: string; billing_day: number }) =>
+    request<{ ok: boolean; subscription: BudgetSubscription }>(`/api/budget`, {
+      method: "POST",
+      body: JSON.stringify({ action: "add-sub", ...sub }),
+    }),
+
+  deleteSubscription: (id: string) =>
+    request<{ ok: boolean }>(`/api/budget`, {
+      method: "POST",
+      body: JSON.stringify({ action: "delete-sub", id }),
     }),
 };
 

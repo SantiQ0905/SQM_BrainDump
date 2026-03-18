@@ -86,7 +86,7 @@ export default async function handler(req: any, res: any) {
       const [y, m] = month.split("-").map(Number);
       const nextMonth = m === 12 ? `${y + 1}-01-01` : `${y}-${String(m + 1).padStart(2, "0")}-01`;
 
-      const [txResult, savingsResult] = await Promise.all([
+      const [txResult, savingsResult, subsResult] = await Promise.all([
         supabase
           .from("budget_transactions")
           .select("*")
@@ -98,10 +98,17 @@ export default async function handler(req: any, res: any) {
           .from("budget_monthly_savings")
           .select("*")
           .eq("month", month),
+        supabase
+          .from("budget_subscriptions")
+          .select("*")
+          .eq("active", true)
+          .order("billing_day"),
       ]);
 
       if (txResult.error) return json(res, 500, { error: txResult.error.message });
       if (savingsResult.error) return json(res, 500, { error: savingsResult.error.message });
+      // subscriptions table may not exist yet — degrade gracefully
+      const subscriptions: any[] = subsResult.data ?? [];
 
       const transactions: any[] = txResult.data ?? [];
       const savings: any[] = savingsResult.data ?? [];
@@ -161,6 +168,7 @@ export default async function handler(req: any, res: any) {
         savings,
         totalSavings,
         creditCards,
+        subscriptions,
         summary: { totalIncome, totalExpenses, netFlow, cashNetFlow, byAccount, byCategory },
       });
     }
@@ -190,6 +198,34 @@ export default async function handler(req: any, res: any) {
           .upsert(upserts, { onConflict: "month,account" });
         if (error) return json(res, 500, { error: error.message });
         return json(res, 200, { ok: true, month, accounts: upserts.length });
+      }
+
+      // ── Add subscription ─────────────────────────────────────────
+      if (String(body.action ?? "") === "add-sub") {
+        const name = String(body.name ?? "").trim();
+        const amount = Math.abs(Number(body.amount));
+        const account = normalizeAccount(String(body.account ?? "").trim());
+        const category = String(body.category ?? "bills").toLowerCase();
+        const billing_day = parseInt(String(body.billing_day ?? "1"), 10);
+        if (!name) return json(res, 400, { error: "name required" });
+        if (!amount || isNaN(amount)) return json(res, 400, { error: "amount required" });
+        if (!account) return json(res, 400, { error: "invalid account" });
+        if (billing_day < 1 || billing_day > 31) return json(res, 400, { error: "billing_day must be 1–31" });
+        const { data, error } = await supabase
+          .from("budget_subscriptions")
+          .insert({ name, amount, account, category, billing_day })
+          .select().single();
+        if (error) return json(res, 500, { error: error.message });
+        return json(res, 200, { ok: true, subscription: data });
+      }
+
+      // ── Delete subscription ───────────────────────────────────────
+      if (String(body.action ?? "") === "delete-sub") {
+        const id = String(body.id ?? "");
+        if (!id) return json(res, 400, { error: "id required" });
+        const { error } = await supabase.from("budget_subscriptions").delete().eq("id", id);
+        if (error) return json(res, 500, { error: error.message });
+        return json(res, 200, { ok: true });
       }
 
       // ── Reset month (delete all transactions + savings) ──────────

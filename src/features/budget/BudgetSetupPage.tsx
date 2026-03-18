@@ -154,11 +154,22 @@ export function BudgetSetupPage() {
       ) : (
         <div className="max-w-lg space-y-5">
 
+          {/* Workflow explanation */}
+          <div className="rounded-2xl border border-[var(--accent)]/30 bg-[var(--accent)]/5 p-5">
+            <p className="text-[11px] font-semibold text-[var(--accent)] uppercase tracking-wider mb-2">How it works</p>
+            <ol className="space-y-2 text-[12px] text-muted">
+              <li><span className="font-semibold text-primary">1. Set starting balances here</span> — enter what you had in each account <em>at the point you start tracking</em>. Example: you had $7,000 in Scotia on the 15th before your paycheck arrived → enter $7,000.</li>
+              <li><span className="font-semibold text-primary">2. Log income as a transaction</span> — got paid $14,000 on the 16th? Go to Budget and add a <span className="font-mono">+$14,000 @earnings</span> transaction dated 3/16. The balance updates automatically.</li>
+              <li><span className="font-semibold text-primary">3. Log every expense</span> — spent on the 16th and 17th? Add each as a <span className="font-mono">-$amount</span> transaction with the correct date.</li>
+            </ol>
+            <p className="mt-3 text-[11px] text-muted">The dashboard will then show: Starting ($7k) + Income ($14k) − Expenses = current balance.</p>
+          </div>
+
           {/* Debit accounts */}
           <div className="rounded-2xl border border-app bg-surface p-6 shadow-sm">
             <h2 className="mb-1 text-sm font-semibold text-primary">Debit Accounts — Starting Balance</h2>
             <p className="mb-4 text-[11px] text-muted">
-              Your current savings in each debit account at the start of {monthLabel(month)}.
+              What you had in each account <em>before</em> your first logged transaction. This is your reference point — all transactions are added on top of this.
             </p>
             <div className="space-y-3">
               {DEBIT_ACCOUNTS.map((acc) => (

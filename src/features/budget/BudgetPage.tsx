@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api, ACCOUNTS } from "../../lib/api";
-import type { BudgetData } from "../../lib/api";
+import type { BudgetData, BudgetSubscription } from "../../lib/api";
 
 const CREDIT_CARDS: Record<string, { limit: number; cutDay: number }> = {
   AMEX:     { limit: 10000, cutDay: 4 },
@@ -90,6 +90,16 @@ export function BudgetPage() {
   const [savSaving, setSavSaving] = useState(false);
   const [savError, setSavError] = useState<string | null>(null);
 
+  // Subscriptions form
+  const [subName, setSubName]   = useState("");
+  const [subAmt, setSubAmt]     = useState("");
+  const [subAcct, setSubAcct]   = useState(ACCOUNTS[0]);
+  const [subCat, setSubCat]     = useState("bills");
+  const [subDay, setSubDay]     = useState("1");
+  const [subSaving, setSubSaving] = useState(false);
+  const [subError, setSubError] = useState<string | null>(null);
+  const [subFormOpen, setSubFormOpen] = useState(false);
+
   async function refresh() {
     setLoading(true);
     setError(null);
@@ -167,9 +177,39 @@ export function BudgetPage() {
     }
   }
 
+  async function addSubscription() {
+    const amount = parseFloat(subAmt.replace(/,/g, ""));
+    if (!subName.trim()) { setSubError("Name required"); return; }
+    if (isNaN(amount) || amount <= 0) { setSubError("Enter a valid amount"); return; }
+    const day = parseInt(subDay, 10);
+    if (isNaN(day) || day < 1 || day > 31) { setSubError("Day must be 1–31"); return; }
+    setSubSaving(true);
+    setSubError(null);
+    try {
+      await api.addSubscription({ name: subName.trim(), amount, account: subAcct, category: subCat || "bills", billing_day: day });
+      setSubName(""); setSubAmt(""); setSubDay("1"); setSubCat("bills");
+      setSubFormOpen(false);
+      await refresh();
+    } catch (e: any) {
+      setSubError(e?.message || "Failed to save");
+    } finally {
+      setSubSaving(false);
+    }
+  }
+
+  async function deleteSubscription(id: string) {
+    try {
+      await api.deleteSubscription(id);
+      await refresh();
+    } catch {
+      // silent
+    }
+  }
+
   const summary = data?.summary;
   const savings = data?.savings ?? [];
   const transactions = data?.transactions ?? [];
+  const subscriptions: BudgetSubscription[] = data?.subscriptions ?? [];
 
   // Sort by category for expense breakdown (expenses only)
   const expenseByCategory = Object.entries(summary?.byCategory ?? {})
@@ -282,10 +322,12 @@ export function BudgetPage() {
             </div>
           )}
 
-          {/* Monthly savings setup */}
+          {/* Starting balances */}
           <div className="rounded-2xl border border-app bg-surface p-5 shadow-sm">
-            <h2 className="mb-3 text-sm font-semibold text-primary">Monthly Savings</h2>
-            <p className="mb-3 text-[11px] text-muted">Set your starting balance per account for {monthLabel(month)}.</p>
+            <h2 className="mb-1 text-sm font-semibold text-primary">Starting Balances</h2>
+            <p className="mb-3 text-[11px] text-muted">
+              What you had in each account <em>before</em> your first logged transaction this month. Log salary and expenses as transactions below — the balance is calculated automatically.
+            </p>
             {savings.length > 0 && (
               <ul className="mb-3 space-y-1.5">
                 {savings.map((s) => (
@@ -498,6 +540,123 @@ export function BudgetPage() {
             </div>
           )}
 
+          {/* Subscriptions */}
+          <div className="rounded-2xl border border-app bg-surface shadow-sm">
+            <div className="border-b border-subtle px-5 py-4 flex items-center justify-between">
+              <div>
+                <h2 className="text-sm font-semibold text-primary">Subscriptions</h2>
+                <p className="text-[10px] text-muted mt-0.5">Known recurring charges — for reference</p>
+              </div>
+              <button
+                onClick={() => setSubFormOpen((v) => !v)}
+                className="rounded-lg border border-app px-2.5 py-1 text-[11px] font-medium text-muted transition hover:text-primary hover:bg-[var(--surface-raised)]"
+              >
+                {subFormOpen ? "Cancel" : "+ Add"}
+              </button>
+            </div>
+
+            {subFormOpen && (
+              <div className="border-b border-subtle px-5 py-4 space-y-2">
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    className="flex-1 rounded-lg border border-app bg-[var(--surface-raised)] px-3 py-2 text-[12px] text-primary outline-none placeholder:text-faint focus:border-[var(--accent)]/50"
+                    placeholder="Name (e.g. Netflix)"
+                    value={subName}
+                    onChange={(e) => setSubName(e.target.value)}
+                  />
+                  <input
+                    type="number"
+                    step="0.01"
+                    className="w-24 rounded-lg border border-app bg-[var(--surface-raised)] px-3 py-2 text-[12px] text-primary outline-none placeholder:text-faint focus:border-[var(--accent)]/50"
+                    placeholder="Amount"
+                    value={subAmt}
+                    onChange={(e) => setSubAmt(e.target.value)}
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <select
+                    value={subAcct}
+                    onChange={(e) => setSubAcct(e.target.value as any)}
+                    className="flex-1 rounded-lg border border-app bg-[var(--surface-raised)] px-2 py-2 text-[12px] text-primary outline-none focus:border-[var(--accent)]/50"
+                  >
+                    {ACCOUNTS.map((a) => <option key={a} value={a}>{a}</option>)}
+                  </select>
+                  <input
+                    type="text"
+                    className="w-24 rounded-lg border border-app bg-[var(--surface-raised)] px-3 py-2 text-[12px] text-primary outline-none placeholder:text-faint focus:border-[var(--accent)]/50"
+                    placeholder="@category"
+                    value={subCat}
+                    onChange={(e) => setSubCat(e.target.value.replace(/^@/, "").toLowerCase())}
+                  />
+                  <div className="flex items-center gap-1">
+                    <span className="text-[11px] text-muted shrink-0">Day</span>
+                    <input
+                      type="number"
+                      min="1"
+                      max="31"
+                      className="w-14 rounded-lg border border-app bg-[var(--surface-raised)] px-2 py-2 text-[12px] text-primary outline-none focus:border-[var(--accent)]/50"
+                      value={subDay}
+                      onChange={(e) => setSubDay(e.target.value)}
+                    />
+                  </div>
+                </div>
+                {subError && <p className="text-[11px] text-red-400">{subError}</p>}
+                <button
+                  onClick={addSubscription}
+                  disabled={subSaving || !subName || !subAmt}
+                  className="w-full rounded-lg bg-[var(--accent)] px-3 py-2 text-xs font-semibold text-[var(--accent-fg)] transition hover:bg-[var(--accent-hover)] disabled:opacity-40"
+                >
+                  {subSaving ? "Saving…" : "Add Subscription"}
+                </button>
+              </div>
+            )}
+
+            {subscriptions.length === 0 && !subFormOpen ? (
+              <div className="px-5 py-8 text-center text-[12px] text-faint">
+                No subscriptions yet — click + Add to track recurring charges.
+              </div>
+            ) : subscriptions.length > 0 ? (
+              <ul>
+                {subscriptions.map((sub, i) => {
+                  const todayDay = parseInt(todayYMD().split("-")[2], 10);
+                  const charged = sub.billing_day <= todayDay;
+                  return (
+                    <li
+                      key={sub.id}
+                      className={`flex items-center gap-3 px-5 py-3 ${i > 0 ? "border-t border-subtle" : ""}`}
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[12px] font-medium text-primary">{sub.name}</span>
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${
+                            charged
+                              ? "bg-emerald-500/10 text-emerald-400"
+                              : "bg-amber-500/10 text-amber-400"
+                          }`}>
+                            {charged ? `charged (day ${sub.billing_day})` : `day ${sub.billing_day}`}
+                          </span>
+                        </div>
+                        <div className="mt-0.5 text-[10px] text-muted">
+                          <span className={`${catColor(sub.category)}`}>@{sub.category}</span>
+                          {" · "}{sub.account}
+                        </div>
+                      </div>
+                      <span className="shrink-0 text-[13px] font-bold text-red-400">
+                        -{fmtAmt(Number(sub.amount))}
+                      </span>
+                      <button
+                        onClick={() => deleteSubscription(sub.id)}
+                        className="ml-1 shrink-0 rounded p-1 text-faint transition hover:text-red-400"
+                        title="Delete"
+                      >×</button>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : null}
+          </div>
+
           {/* Transaction list */}
           <div className="rounded-2xl border border-app bg-surface shadow-sm">
             <div className="border-b border-subtle px-5 py-4 flex items-center justify-between">
@@ -514,7 +673,7 @@ export function BudgetPage() {
                 <div className="mb-2 text-3xl">$</div>
                 <div className="text-sm">No transactions yet</div>
                 {savings.length === 0
-                  ? <div className="mt-1 text-xs text-muted">Start by setting your savings balance on the left, then log your first transaction.</div>
+                  ? <div className="mt-1 text-xs text-muted">Start by setting your starting balance on the left, then log your first transaction.</div>
                   : <div className="mt-1 text-xs text-muted">Use the form on the left or send <span className="font-mono">BM: -$100 @food #NUDebit</span> via Telegram.</div>
                 }
               </div>
