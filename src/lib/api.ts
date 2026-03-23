@@ -294,5 +294,11 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ action: "delete-sub", id }),
     }),
+
+  reconcileBalance: (account: string, actualBalance: number, date?: string, month?: string) =>
+    request<{ ok: boolean; delta: number; transaction?: BudgetTransaction; message?: string }>(`/api/budget`, {
+      method: "POST",
+      body: JSON.stringify({ action: "reconcile", account, actualBalance, date, month }),
+    }),
 };
 

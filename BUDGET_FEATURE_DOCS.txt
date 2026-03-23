@@ -1,0 +1,611 @@
+================================================================================
+  BRAIN-DUMP APP — BUDGET FEATURE DOCUMENTATION
+  Generated: 2026-03-23
+================================================================================
+
+TABLE OF CONTENTS
+-----------------
+1. Overview
+2. Pages & Navigation
+3. Budget Setup Page (/budget/setup)
+4. Budget Main Page (/budget)
+   4a. Month Navigation
+   4b. Summary Cards
+   4c. Account Balances
+   4d. Credit Card Tracking
+   4e. Transactions List
+   4f. Add Transaction Form
+   4g. Balance Reconciliation
+   4h. Subscriptions
+   4i. Category Breakdown
+5. Telegram Integration
+6. API Reference
+7. Database Tables
+8. Environment Variables
+9. Accounts Reference
+10. Full Setup Walkthrough (New Month)
+11. Mid-Month Recovery Workflow
+
+
+================================================================================
+1. OVERVIEW
+================================================================================
+
+The Budget feature is a personal cashflow tracker built into the brain-dump app.
+It tracks income and expenses across multiple bank accounts and credit cards, with
+support for entering transactions via the web UI or via Telegram bot messages.
+
+Key capabilities:
+- Monthly cashflow: income, expenses, net flow per account and category
+- Starting balance configuration per account (debit and credit cards)
+- Credit card utilization tracking (limit, spent, available, cut date)
+- Subscription reference list (recurring charges by billing day)
+- Telegram bot shortcut: type a transaction directly from your phone
+- PIN-protected setup page to configure initial balances each month
+
+
+================================================================================
+2. PAGES & NAVIGATION
+================================================================================
+
+The sidebar shows a "$" icon labeled "Budget" that links to /budget.
+
+Two routes exist:
+  /budget         — Main dashboard (transaction log + summary)
+  /budget/setup   — Initial config (set starting balances, PIN required)
+
+Both pages require the app's admin key (handled by RequireAdminKey at the
+router level — the same protection that guards all other pages).
+
+
+================================================================================
+3. BUDGET SETUP PAGE (/budget/setup)
+================================================================================
+
+PURPOSE
+-------
+This page is used at the start of each month (or whenever you need to set the
+"starting state" of each account). It records:
+
+  - Debit accounts: how much cash you actually have right now
+  - Credit cards: how much you already owe (before new charges this month)
+
+This starting balance is stored in `budget_monthly_savings` and used by the main
+budget page to calculate real account balances as transactions accumulate.
+
+PIN PROTECTION
+--------------
+Before you can save anything, you must enter a PIN. The PIN is validated against
+the `BUDGET_SETUP_PIN` environment variable (set in Vercel). Once verified, the
+session is stored in sessionStorage so you do not need to re-enter it on the
+same browser session.
+
+FIELDS
+------
+The setup form has four account fields:
+
+  Debit Accounts (cash in account):
+    - ScotiabankDebit  — your Scotiabank checking/savings balance
+    - NUDebit          — your Nu debit card balance
+
+  Credit Cards (amount already owed, before new charges this month):
+    - AMEX             — outstanding balance on your AMEX card
+    - NUCredit         — outstanding balance on your Nu credit card
+
+HOW TO USE IT
+-------------
+1. Navigate to /budget/setup
+2. Enter your PIN when prompted
+3. Fill in the current balance for each account:
+     - For debit accounts: type the actual money you have in that account today
+     - For credit cards: type the amount you currently owe (can be 0 if paid off)
+4. Click "Save Configuration"
+5. A success message confirms the data was saved to the database
+6. Return to /budget to start logging transactions for the month
+
+WHEN TO RUN SETUP
+-----------------
+- At the beginning of each new month
+- Any time you want to "reset" the starting point for the current month
+- If you forgot to set it up, you can do it retroactively; the system defaults
+  to 0 for any account that has no saved starting balance
+
+API CALL
+--------
+POST /api/budget  { action: "set-initial", pin, month, balances: { [account]: number } }
+
+
+================================================================================
+4. BUDGET MAIN PAGE (/budget)
+================================================================================
+
+The main page is divided into several sections described below.
+
+
+--------------------------------------------------------------------------------
+4a. MONTH NAVIGATION
+--------------------------------------------------------------------------------
+
+At the top of the page there are Previous / Next arrows to navigate between
+months (format: YYYY-MM). The currently displayed month is shown in the header.
+All data (transactions, savings, summary) automatically reload when you change
+the month.
+
+
+--------------------------------------------------------------------------------
+4b. SUMMARY CARDS
+--------------------------------------------------------------------------------
+
+Four cards show the month's top-level numbers:
+
+  INCOME      — sum of all positive transactions for the month
+  EXPENSES    — sum of all negative transactions for the month
+  CASH NET    — net flow for debit accounts only (NUDebit + ScotiabankDebit)
+  SAVINGS     — total cash saved (starting debit balance + cash net flow)
+
+"Savings" is important: it tells you how much actual liquid cash you have at
+the end of the month across all debit accounts combined.
+
+
+--------------------------------------------------------------------------------
+4c. ACCOUNT BALANCES
+--------------------------------------------------------------------------------
+
+Below the summary cards, each account shows a breakdown row:
+
+  Account Name | Starting Balance | + Income | - Expenses | = Net Balance
+
+  - Debit accounts show real cash flow (income added, expenses subtracted)
+  - Credit cards show utilization (charges added, payments subtracted)
+  - "Starting Balance" comes from budget_monthly_savings (set via Setup page)
+  - "Net Balance" = starting balance + all transactions for that account
+
+You can also directly edit the starting balance for any account inline on this
+page (click the edit icon next to the starting balance number). This saves to
+budget_monthly_savings via POST /api/budget { action: "set-savings" }.
+
+
+--------------------------------------------------------------------------------
+4d. CREDIT CARD TRACKING
+--------------------------------------------------------------------------------
+
+Credit cards (AMEX and NUCredit) get an extra section showing:
+
+  Limit          — configured card limit (hardcoded in api/budget/index.ts)
+  Already Owed   — starting balance (from Setup page)
+  Spent          — total charges made to this card this month
+  Available      — limit - already owed - spent
+  Cut Date       — the billing cycle end date (configured per card)
+  Days Until Cut — how many days until the next statement cut
+
+Credit card limits and cut dates are configured in the API handler file
+(api/budget/index.ts) in the CREDIT_CARDS constant:
+
+  AMEX:
+    limit: (see file)
+    cutDay: (day of month the statement cuts)
+
+  NUCredit:
+    limit: (see file)
+    cutDay: (day of month the statement cuts)
+
+To change limits or cut dates, edit the CREDIT_CARDS constant in that file
+and redeploy.
+
+
+--------------------------------------------------------------------------------
+4e. TRANSACTIONS LIST
+--------------------------------------------------------------------------------
+
+All transactions for the selected month are listed in a table with columns:
+
+  Date | Description | Category | Account | Amount | (delete button)
+
+Transactions are sorted by date descending (newest first).
+
+Source column or indicator shows whether the transaction was entered via:
+  - "web"      — added through the browser form
+  - "telegram" — added via the Telegram bot
+
+The delete button (trash icon) calls POST /api/budget { action: "delete", id }
+and removes the transaction immediately.
+
+There is also a "Reset Month" button (usually at the bottom or in a settings
+area) that deletes ALL transactions and savings for the current month. This is
+destructive and should only be used if you want to start the month over.
+
+
+--------------------------------------------------------------------------------
+4f. ADD TRANSACTION FORM
+--------------------------------------------------------------------------------
+
+A form at the top or side of the page lets you manually add a transaction.
+
+Fields:
+  Amount      — positive number for income, negative for expense (e.g., -300 or 500)
+  Category    — free text or dropdown (e.g., food, transport, earnings, rent)
+  Description — optional note about the transaction
+  Account     — dropdown: AMEX, NUCredit, NUDebit, ScotiabankDebit
+  Date        — defaults to today, can be changed
+
+On submit: POST /api/budget { action: "add-transaction", amount, category,
+                               description, account, date, source: "web" }
+
+The list refreshes automatically after adding.
+
+
+--------------------------------------------------------------------------------
+4g. BALANCE RECONCILIATION
+--------------------------------------------------------------------------------
+
+PURPOSE
+-------
+When you start tracking mid-month, or when untracked transactions have
+accumulated, the app's calculated balance will differ from your real bank
+balance. Instead of hunting down every missing transaction, the Reconciliation
+tool lets you enter the actual current balance and automatically creates a
+single "adjustment" transaction to cover the gap.
+
+HOW IT WORKS
+------------
+1. Select the account you want to reconcile (any of the four accounts)
+2. Type your actual current balance (what your bank app shows right now)
+3. The app computes:
+     Calculated balance = starting balance + sum of all logged transactions
+     Adjustment = actual - calculated
+4. A live preview shows the adjustment amount before you commit
+5. Click "Reconcile" — an adjustment transaction is inserted:
+     Category: adjustment
+     Description: Balance reconciliation
+     Amount: the delta (positive if app was under-counting, negative if over)
+6. The transaction list and all summary cards update immediately
+
+WHAT THE ADJUSTMENT ENTRY LOOKS LIKE
+-------------------------------------
+It appears in the transaction list like any other entry:
+  Date:        today (in America/Monterrey timezone)
+  Category:    adjustment
+  Description: Balance reconciliation
+  Account:     whichever account you selected
+  Amount:      the computed delta
+  Source:      web
+
+You can delete it later like any other transaction if you figure out what the
+real missing transactions were and want to log them properly.
+
+CREDIT CARD RECONCILIATION
+--------------------------
+Works the same way for credit cards. Enter how much you currently owe on the
+card. The app computes: starting owed + all charges - all payments = calculated
+owed. The delta is inserted as an adjustment transaction on that card.
+
+API CALL
+--------
+POST /api/budget  { action: "reconcile", account, actualBalance, date?, month? }
+
+Response:
+  { ok: true, delta: number, transaction?: BudgetTransaction }
+  { ok: true, delta: 0, message: "Balance already matches" }   ← if no gap
+
+--------------------------------------------------------------------------------
+4h. SUBSCRIPTIONS
+--------------------------------------------------------------------------------
+
+A separate section lets you maintain a reference list of recurring charges.
+These are NOT automatically added to your transactions — they are just a
+reminder of what to expect each month.
+
+Fields when adding a subscription:
+  Name        — service name (e.g., "Netflix", "Spotify")
+  Amount      — monthly charge
+  Account     — which card/account it bills to
+  Category    — for reference (e.g., "entertainment", "software")
+  Billing Day — day of the month when it charges (1-31)
+
+The subscription list shows all active subscriptions sorted by billing day,
+so you can see which charges are coming up soon in the month.
+
+Adding:   POST /api/budget { action: "add-sub", name, amount, account, category, billing_day }
+Deleting: POST /api/budget { action: "delete-sub", id }
+
+
+--------------------------------------------------------------------------------
+4i. CATEGORY BREAKDOWN
+--------------------------------------------------------------------------------
+
+Two breakdown sections display spending patterns:
+
+  BY EXPENSE CATEGORY — each category with total spent and % of total expenses
+  BY INCOME CATEGORY  — each category with total received and % of total income
+
+These are calculated from the transactions list and update in real time as
+you add or delete transactions.
+
+
+================================================================================
+5. TELEGRAM INTEGRATION
+================================================================================
+
+You can log budget transactions directly from Telegram without opening the app.
+
+PATTERN
+-------
+  BM: [sign]$[amount] @[category] [description] #[account]
+
+  - BM:       — required prefix (Budget Message)
+  - sign      — + for income, - for expense (optional; defaults to expense if omitted)
+  - $amount   — number, supports commas (e.g., $1,500 or $300)
+  - @category — required; category tag (no spaces; use underscore if needed)
+  - description — optional; any text between @category and #account
+  - #account  — required; one of the valid account names (case-insensitive)
+
+EXAMPLES
+--------
+  BM: +$16000 @earnings Salary #ScotiabankDebit
+    → Income of $16,000 to ScotiabankDebit, category: earnings, desc: "Salary"
+
+  BM: -$300 @food Groceries #NUDebit
+    → Expense of $300 from NUDebit, category: food, desc: "Groceries"
+
+  BM: -$1500 @rent Apartment #ScotiabankDebit
+    → Expense of $1,500 from ScotiabankDebit, category: rent, desc: "Apartment"
+
+  BM: -$99 @software #AMEX
+    → Expense of $99 from AMEX, category: software, no description
+
+VALID ACCOUNTS (case-insensitive in Telegram)
+---------------------------------------------
+  ScotiabankDebit
+  NUDebit
+  NUCredit
+  AMEX
+
+BEHAVIOR
+--------
+- The bot uses today's date in America/Monterrey timezone
+- On success, the bot replies with a formatted confirmation:
+    ✅ Transaction logged!
+    Amount: -$300.00
+    Category: food
+    Description: Groceries
+    Account: NUDebit
+    Date: 2026-03-23
+- On error (invalid account, missing @category, missing #account), the bot
+  replies with an error message explaining what went wrong
+- Transactions via Telegram appear in the web UI with source="telegram"
+
+TELEGRAM /budget COMMAND
+------------------------
+Send `/budget` to the bot and it replies with the current month's cashflow
+summary (income, expenses, net flow) — same as the summary cards on the web page.
+
+
+================================================================================
+6. API REFERENCE
+================================================================================
+
+All endpoints are at: /api/budget
+
+GET /api/budget?month=YYYY-MM
+  Returns full budget data for the month including:
+  - transactions[]
+  - savings[] (starting balances)
+  - subscriptions[]
+  - summary { totalIncome, totalExpenses, netFlow, cashNetFlow, byAccount, byCategory }
+  - creditCards[] (utilization data per credit card)
+  - totalSavings
+
+GET /api/budget?config=1&month=YYYY-MM
+  Returns only the savings config (starting balances) for the Setup page.
+
+POST /api/budget — Actions:
+
+  add-transaction
+    Body: { action, amount, category, description, account, date, source }
+    Creates a new transaction row in budget_transactions.
+
+  set-savings
+    Body: { action, account, amount, month }
+    Upserts starting balance for one account in budget_monthly_savings.
+
+  set-initial
+    Body: { action, pin, month, balances: { [account]: number } }
+    PIN-protected bulk upsert for all accounts. Used by Setup page.
+
+  delete
+    Body: { action, id }
+    Deletes transaction by ID from budget_transactions.
+
+  reset
+    Body: { action, month }
+    Deletes ALL transactions and savings for the given month. Destructive.
+
+  verify-pin
+    Body: { action, pin }
+    Returns { ok: true } if pin matches BUDGET_SETUP_PIN env var.
+
+  add-sub
+    Body: { action, name, amount, account, category, billing_day }
+    Creates a new row in budget_subscriptions.
+
+  delete-sub
+    Body: { action, id }
+    Deletes subscription by ID from budget_subscriptions.
+
+  reconcile
+    Body: { action, account, actualBalance, date?, month? }
+    Computes delta between actual and tracked balance, inserts an adjustment
+    transaction if the gap is >= $0.01. Returns delta and inserted transaction.
+    If balance already matches, returns { delta: 0, message }.
+
+
+================================================================================
+7. DATABASE TABLES
+================================================================================
+
+budget_transactions
+-------------------
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid()
+  date            DATE NOT NULL
+  amount          NUMERIC NOT NULL  (positive = income, negative = expense)
+  category        TEXT NOT NULL
+  description     TEXT
+  account         TEXT NOT NULL  (one of the four valid accounts)
+  source          TEXT  ('web' or 'telegram')
+  raw             TEXT  (original Telegram message, if applicable)
+  telegram_chat_id TEXT
+  created_at      TIMESTAMPTZ DEFAULT now()
+
+budget_monthly_savings
+----------------------
+  id      UUID PRIMARY KEY DEFAULT gen_random_uuid()
+  month   TEXT NOT NULL  (format: YYYY-MM)
+  account TEXT NOT NULL
+  amount  NUMERIC NOT NULL  (starting balance for that account in that month)
+  UNIQUE(month, account)
+
+budget_subscriptions
+--------------------
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid()
+  name        TEXT NOT NULL
+  amount      NUMERIC NOT NULL
+  account     TEXT NOT NULL
+  category    TEXT NOT NULL
+  billing_day INT NOT NULL  (1-31, day of month it charges)
+  active      BOOLEAN NOT NULL DEFAULT true
+  created_at  TIMESTAMPTZ DEFAULT now()
+
+
+================================================================================
+8. ENVIRONMENT VARIABLES
+================================================================================
+
+BUDGET_SETUP_PIN
+  The PIN required to access and save data on the /budget/setup page.
+  Set this in Vercel environment variables.
+  Example: BUDGET_SETUP_PIN=1234
+
+SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY
+  Required for all database operations (shared with the rest of the app).
+
+TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID
+  Required for the Telegram bot integration (shared with the rest of the app).
+
+
+================================================================================
+9. ACCOUNTS REFERENCE
+================================================================================
+
+The app recognizes exactly four accounts. These names must be used exactly
+(case-insensitive in Telegram, exact match in the web form dropdown):
+
+  ScotiabankDebit  — Debit/checking. Treated as cash. Included in Cash Net and Savings.
+  NUDebit          — Nu debit card. Treated as cash. Included in Cash Net and Savings.
+  AMEX             — American Express credit card. Has limit and cut date.
+  NUCredit         — Nu credit card. Has limit and cut date.
+
+To add or rename accounts, you must:
+1. Update the ACCOUNTS constant in src/lib/api.ts
+2. Update the VALID_ACCOUNTS array in api/telegram/webhook.ts
+3. Update the CREDIT_CARDS config in api/budget/index.ts (if it's a credit card)
+4. Update any hardcoded references in BudgetPage.tsx
+
+
+================================================================================
+10. FULL SETUP WALKTHROUGH (NEW MONTH)
+================================================================================
+
+Follow these steps at the start of each new month:
+
+STEP 1 — Check your real account balances
+  Open your banking apps and note down:
+  - Scotiabank debit: actual balance
+  - Nu debit: actual balance
+  - AMEX: current outstanding balance (what you owe right now)
+  - NUCredit: current outstanding balance (what you owe right now)
+
+STEP 2 — Open /budget/setup
+  Navigate to the setup page in the app.
+
+STEP 3 — Enter your PIN
+  Type the BUDGET_SETUP_PIN value and confirm.
+
+STEP 4 — Enter starting balances
+  Fill in the four fields with the values from Step 1.
+  Click "Save Configuration".
+  The system will confirm the data was saved for the current month.
+
+STEP 5 — Go to /budget
+  The main page now shows your starting balances in the Account Balances section
+  with $0 income and expenses (no transactions yet for the month).
+
+STEP 6 — Start logging transactions
+  Via web form: use the Add Transaction form on the main page.
+  Via Telegram: send BM: messages from your phone throughout the month.
+
+STEP 7 — Monitor throughout the month
+  Check /budget anytime to see:
+  - How much you've earned and spent
+  - Which categories are consuming the most
+  - Credit card utilization and days until cut
+  - Total savings projection
+
+STEP 8 — Use /budget Telegram command for quick checks
+  Send `/budget` to your bot to get a quick summary without opening the browser.
+
+STEP 9 — At month end
+  Review the final summary. Then repeat from Step 1 for the next month.
+  Previous months remain accessible via the month navigation arrows.
+
+================================================================================
+11. MID-MONTH RECOVERY WORKFLOW
+================================================================================
+
+Use this workflow when you start tracking partway through the month and don't
+have a full transaction history from day 1 (e.g., you started on the 16th
+after payday and don't remember earlier activity).
+
+GOAL: Get an accurate picture from a known anchor point onward, without
+fabricating or hunting for transactions you can't recall.
+
+STEP 1 — Set starting balances to your anchor date state
+  Open /budget/setup (or use the inline Starting Balances form on /budget).
+  Enter the balances as they were on your chosen anchor date — for example,
+  the day payday hit, or the first date you have clear records from.
+
+  - Debit accounts: cash in account on the anchor date
+  - Credit cards: amount owed on the anchor date
+
+STEP 2 — Backfill known transactions since the anchor date
+  Use the Add Transaction form (date field is editable) to log any income or
+  expenses you do remember from between the anchor date and today.
+  Use the web form — do NOT use Telegram for backdated entries, as the bot
+  always uses today's date.
+
+STEP 3 — Reconcile each account
+  After backfilling, open the Reconcile Balance card on /budget.
+  For each account:
+    1. Check your banking app for the current real balance
+    2. Enter it in the Reconcile form
+    3. The app previews the adjustment amount
+    4. Click Reconcile — an "adjustment" transaction absorbs the remaining gap
+
+  This step accounts for anything between the anchor date and today that you
+  couldn't itemize individually.
+
+STEP 4 — Verify
+  After reconciling all accounts, the Account Balances card should match your
+  real bank app balances. Summary cards now reflect an accurate current state.
+
+STEP 5 — Continue normally
+  From today forward, log every transaction as usual via Telegram (BM:) or the
+  web form. The adjustment entry anchors your history; new entries extend it.
+
+NOTE: The adjustment transaction is labelled "adjustment / Balance
+reconciliation" in the category breakdown. If you later find and log the real
+missing transactions, delete the adjustment entry and add the real ones instead
+so your category breakdowns remain meaningful.
+
+================================================================================
+END OF DOCUMENT
+================================================================================

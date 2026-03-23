@@ -90,6 +90,13 @@ export function BudgetPage() {
   const [savSaving, setSavSaving] = useState(false);
   const [savError, setSavError] = useState<string | null>(null);
 
+  // Reconcile form
+  const [recAcct, setRecAcct]   = useState<typeof ACCOUNTS[number]>(ACCOUNTS[0]);
+  const [recBal, setRecBal]     = useState("");
+  const [recSaving, setRecSaving] = useState(false);
+  const [recError, setRecError] = useState<string | null>(null);
+  const [recResult, setRecResult] = useState<string | null>(null);
+
   // Subscriptions form
   const [subName, setSubName]   = useState("");
   const [subAmt, setSubAmt]     = useState("");
@@ -194,6 +201,38 @@ export function BudgetPage() {
       setSubError(e?.message || "Failed to save");
     } finally {
       setSubSaving(false);
+    }
+  }
+
+  function computeRecDelta(): number | null {
+    if (!data || !recBal) return null;
+    const actual = parseFloat(recBal.replace(/,/g, ""));
+    if (isNaN(actual)) return null;
+    const sav = data.savings.find((s) => s.account === recAcct);
+    const startBal = sav ? Number(sav.amount) : 0;
+    const netFlow = data.transactions.filter((t) => t.account === recAcct).reduce((s, t) => s + Number(t.amount), 0);
+    return Math.round((actual - (startBal + netFlow)) * 100) / 100;
+  }
+
+  async function reconcileBalance() {
+    const actual = parseFloat(recBal.replace(/,/g, ""));
+    if (isNaN(actual)) { setRecError("Enter a valid balance"); return; }
+    setRecSaving(true);
+    setRecError(null);
+    setRecResult(null);
+    try {
+      const r = await api.reconcileBalance(recAcct, actual, undefined, month);
+      if (r.delta === 0) {
+        setRecResult("Balance already matches — no adjustment needed.");
+      } else {
+        setRecResult(`Adjustment of ${fmtAmt(r.delta, true)} logged for ${recAcct}.`);
+      }
+      setRecBal("");
+      await refresh();
+    } catch (e: any) {
+      setRecError(e?.message || "Failed to reconcile");
+    } finally {
+      setRecSaving(false);
     }
   }
 
@@ -364,6 +403,56 @@ export function BudgetPage() {
               </button>
             </div>
             {savError && <p className="text-[11px] text-red-400">{savError}</p>}
+          </div>
+
+          {/* Balance Reconciliation */}
+          <div className="rounded-2xl border border-app bg-surface p-5 shadow-sm">
+            <h2 className="mb-1 text-sm font-semibold text-primary">Reconcile Balance</h2>
+            <p className="mb-3 text-[11px] text-muted">
+              Enter your actual current balance. The app computes the gap vs. tracked transactions and logs an <em>adjustment</em> entry automatically.
+            </p>
+            <div className="space-y-2">
+              <div className="flex gap-2">
+                <select
+                  value={recAcct}
+                  onChange={(e) => { setRecAcct(e.target.value as any); setRecResult(null); setRecError(null); }}
+                  className="rounded-lg border border-app bg-[var(--surface-raised)] px-2 py-2 text-[12px] text-primary outline-none focus:border-[var(--accent)]/50"
+                >
+                  {ACCOUNTS.map((a) => <option key={a} value={a}>{a}</option>)}
+                </select>
+                <input
+                  type="number"
+                  step="0.01"
+                  className="flex-1 rounded-lg border border-app bg-[var(--surface-raised)] px-3 py-2 text-[13px] text-primary outline-none placeholder:text-faint focus:border-[var(--accent)]/50"
+                  placeholder="Actual balance now"
+                  value={recBal}
+                  onChange={(e) => { setRecBal(e.target.value); setRecResult(null); }}
+                  onKeyDown={(e) => e.key === "Enter" && reconcileBalance()}
+                />
+              </div>
+              {recBal && (() => {
+                const delta = computeRecDelta();
+                if (delta === null) return null;
+                const isZero = Math.abs(delta) < 0.01;
+                return (
+                  <p className="text-[11px] text-muted">
+                    Adjustment:{" "}
+                    <span className={isZero ? "text-emerald-400" : delta > 0 ? "text-emerald-400" : "text-red-400"}>
+                      {isZero ? "none needed" : fmtAmt(delta, true)}
+                    </span>
+                  </p>
+                );
+              })()}
+              <button
+                onClick={reconcileBalance}
+                disabled={recSaving || !recBal}
+                className="w-full rounded-lg bg-[var(--accent)] px-4 py-2 text-xs font-semibold text-[var(--accent-fg)] shadow-sm transition hover:bg-[var(--accent-hover)] disabled:opacity-40"
+              >
+                {recSaving ? "Reconciling…" : "Reconcile"}
+              </button>
+              {recError && <p className="text-[11px] text-red-400">{recError}</p>}
+              {recResult && <p className="text-[11px] text-emerald-400">{recResult}</p>}
+            </div>
           </div>
 
           {/* Credit Cards */}

@@ -269,6 +269,42 @@ export default async function handler(req: any, res: any) {
         return json(res, 200, { ok: true, saving: data });
       }
 
+      // ── Reconcile balance ─────────────────────────────────────────
+      if (String(body.action ?? "") === "reconcile") {
+        const account = normalizeAccount(String(body.account ?? "").trim());
+        if (!account) return json(res, 400, { error: "invalid account" });
+        const actualBalance = Number(body.actualBalance);
+        if (isNaN(actualBalance)) return json(res, 400, { error: "actualBalance required" });
+        const month = (body.month as string) || ymInTZ(new Date(), TZ);
+        const date = (body.date as string) || ymdInTZ(new Date(), TZ);
+        const monthStart = `${month}-01`;
+        const [my, mm] = month.split("-").map(Number);
+        const nextMonthStr = mm === 12
+          ? `${my + 1}-01-01`
+          : `${my}-${String(mm + 1).padStart(2, "0")}-01`;
+
+        const [savRes, txRes] = await Promise.all([
+          supabase.from("budget_monthly_savings").select("amount").eq("month", month).eq("account", account).maybeSingle(),
+          supabase.from("budget_transactions").select("amount").eq("account", account).gte("date", monthStart).lt("date", nextMonthStr),
+        ]);
+        const startingBalance = savRes.data ? Number(savRes.data.amount) : 0;
+        const netFlow = (txRes.data ?? []).reduce((s: number, t: any) => s + Number(t.amount), 0);
+        const calculatedBalance = startingBalance + netFlow;
+        const delta = Math.round((actualBalance - calculatedBalance) * 100) / 100;
+
+        if (Math.abs(delta) < 0.01) {
+          return json(res, 200, { ok: true, delta: 0, message: "Balance already matches" });
+        }
+
+        const raw = `Reconcile: ${account} actual=${actualBalance} calculated=${calculatedBalance} delta=${delta}`;
+        const { data: inserted, error: insErr } = await supabase
+          .from("budget_transactions")
+          .insert({ date, amount: delta, category: "adjustment", description: "Balance reconciliation", account, source: "web", raw })
+          .select().single();
+        if (insErr) return json(res, 500, { error: insErr.message });
+        return json(res, 200, { ok: true, delta, transaction: inserted });
+      }
+
       // ── Add transaction ───────────────────────────────────────────
       const amount = Number(body.amount);
       const category = String(body.category ?? "general").toLowerCase().replace(/^@/, "");
