@@ -75,7 +75,7 @@ export function Sidebar({
               <img
                 src="/logo.jpg"
                 alt="Eliza Fontaine"
-                className="h-72 w-full object-cover object-top"
+                className="h-44 w-full object-cover object-top sm:h-72"
               />
 
               {/* Bottom-to-top fade */}
@@ -107,7 +107,7 @@ export function Sidebar({
       </div>
 
       {/* ── Nav ───────────────────────────────────────────── */}
-      <nav className={clsx("flex-1 space-y-0.5 py-2", !isExpanded ? "px-2" : "px-3")}>
+      <nav className={clsx("flex-1 overflow-y-auto space-y-0.5 py-2", !isExpanded ? "px-2" : "px-3")}>
         {NAV_ITEMS.map(({ to, label, icon }) => (
           <NavLink
             key={to}

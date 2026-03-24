@@ -70,7 +70,7 @@ export function AppShell() {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   return (
-    <div className="flex h-screen overflow-x-hidden bg-app text-primary transition-colors duration-200">
+    <div className="flex h-screen bg-app text-primary transition-colors duration-200">
       {/* Backdrop overlay — mobile only */}
       {mobileOpen && (
         <div
@@ -100,7 +100,7 @@ export function AppShell() {
       {/* Main content */}
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <TopBar onMenuToggle={() => setMobileOpen((v) => !v)} />
-        <main className="custom-scrollbar flex-1 overflow-y-auto">
+        <main className="custom-scrollbar flex-1 overflow-y-auto overflow-x-hidden">
           <div className="p-4 sm:p-6 lg:p-10">
             <Outlet />
           </div>
