@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 
 const TZ = "America/Monterrey";
+const FISCAL_START_DAY = 16; // fiscal month runs from the 16th to the 15th of the next calendar month
 const VALID_ACCOUNTS = ["AMEX", "NUCredit", "NUDebit", "ScotiabankDebit"];
 
 const CREDIT_CARDS: Record<string, { limit: number; cutDay: number }> = {
@@ -81,10 +82,12 @@ export default async function handler(req: any, res: any) {
 
     if (req.method === "GET") {
       const month = (req.query?.month as string) || ymInTZ(new Date(), TZ);
-      const monthStart = `${month}-01`;
-      // last day: first day of next month minus 1
+      const pad = (n: number) => String(n).padStart(2, "0");
       const [y, m] = month.split("-").map(Number);
-      const nextMonth = m === 12 ? `${y + 1}-01-01` : `${y}-${String(m + 1).padStart(2, "0")}-01`;
+      const nm = m === 12 ? 1 : m + 1;
+      const ny = m === 12 ? y + 1 : y;
+      const monthStart = `${month}-${pad(FISCAL_START_DAY)}`;
+      const nextMonth = `${ny}-${pad(nm)}-${pad(FISCAL_START_DAY)}`;
 
       const [txResult, savingsResult, subsResult] = await Promise.all([
         supabase
@@ -231,11 +234,11 @@ export default async function handler(req: any, res: any) {
       // ── Reset month (delete all transactions + savings) ──────────
       if (String(body.action ?? "") === "reset") {
         const month = (body.month as string) || ymInTZ(new Date(), TZ);
-        const monthStart = `${month}-01`;
         const [ry, rm] = month.split("-").map(Number);
-        const nextMonthStr = rm === 12
-          ? `${ry + 1}-01-01`
-          : `${ry}-${String(rm + 1).padStart(2, "0")}-01`;
+        const rnm = rm === 12 ? 1 : rm + 1;
+        const rny = rm === 12 ? ry + 1 : ry;
+        const monthStart = `${month}-${String(FISCAL_START_DAY).padStart(2, "0")}`;
+        const nextMonthStr = `${rny}-${String(rnm).padStart(2, "0")}-${String(FISCAL_START_DAY).padStart(2, "0")}`;
         const [txDel, savDel] = await Promise.all([
           supabase.from("budget_transactions").delete().gte("date", monthStart).lt("date", nextMonthStr),
           supabase.from("budget_monthly_savings").delete().eq("month", month),
@@ -277,11 +280,11 @@ export default async function handler(req: any, res: any) {
         if (isNaN(actualBalance)) return json(res, 400, { error: "actualBalance required" });
         const month = (body.month as string) || ymInTZ(new Date(), TZ);
         const date = (body.date as string) || ymdInTZ(new Date(), TZ);
-        const monthStart = `${month}-01`;
         const [my, mm] = month.split("-").map(Number);
-        const nextMonthStr = mm === 12
-          ? `${my + 1}-01-01`
-          : `${my}-${String(mm + 1).padStart(2, "0")}-01`;
+        const mnm = mm === 12 ? 1 : mm + 1;
+        const mny = mm === 12 ? my + 1 : my;
+        const monthStart = `${month}-${String(FISCAL_START_DAY).padStart(2, "0")}`;
+        const nextMonthStr = `${mny}-${String(mnm).padStart(2, "0")}-${String(FISCAL_START_DAY).padStart(2, "0")}`;
 
         const [savRes, txRes] = await Promise.all([
           supabase.from("budget_monthly_savings").select("amount").eq("month", month).eq("account", account).maybeSingle(),

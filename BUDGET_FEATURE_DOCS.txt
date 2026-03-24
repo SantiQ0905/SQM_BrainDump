@@ -36,12 +36,30 @@ It tracks income and expenses across multiple bank accounts and credit cards, wi
 support for entering transactions via the web UI or via Telegram bot messages.
 
 Key capabilities:
-- Monthly cashflow: income, expenses, net flow per account and category
+- Fiscal-month cashflow: income, expenses, net flow per account and category
 - Starting balance configuration per account (debit and credit cards)
 - Credit card utilization tracking (limit, spent, available, cut date)
 - Subscription reference list (recurring charges by billing day)
 - Telegram bot shortcut: type a transaction directly from your phone
 - PIN-protected setup page to configure initial balances each month
+- Balance reconciliation to auto-correct gaps when starting mid-month
+
+FISCAL MONTH
+------------
+The budget does NOT use calendar months. The cycle runs from the 16th of one
+calendar month to the 15th of the next (e.g., "Mar" = Mar 16 – Apr 15). This
+aligns with payday on the 16th.
+
+The month header in the UI shows the full range: "Mar 16 – Apr 15, 2026".
+The YYYY-MM identifier (e.g., "2026-03") refers to the fiscal month that
+STARTS in that calendar month — so "2026-03" means Mar 16 – Apr 15, 2026.
+
+Credit card cut dates (AMEX: 4th, NUCredit: 6th) fall in the middle of each
+fiscal cycle (roughly 18–20 days in), not at the boundary. This is expected.
+
+To change the fiscal start day, update FISCAL_START_DAY in both:
+  src/features/budget/BudgetPage.tsx
+  api/budget/index.ts
 
 
 ================================================================================
@@ -515,7 +533,7 @@ To add or rename accounts, you must:
 10. FULL SETUP WALKTHROUGH (NEW MONTH)
 ================================================================================
 
-Follow these steps at the start of each new month:
+Follow these steps on the 16th of each month (fiscal month start):
 
 STEP 1 — Check your real account balances
   Open your banking apps and note down:

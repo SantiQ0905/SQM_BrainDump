@@ -10,6 +10,7 @@ const CREDIT_CARDS: Record<string, { limit: number; cutDay: number }> = {
 const DEBIT_ACCOUNTS = ACCOUNTS.filter((a) => !(a in CREDIT_CARDS));
 
 const TZ = "America/Monterrey";
+const FISCAL_START_DAY = 16; // fiscal month: 16th → 15th of next calendar month
 
 function todayYMD(): string {
   return new Intl.DateTimeFormat("en-CA", {
@@ -19,11 +20,18 @@ function todayYMD(): string {
 
 function thisMonthYM(): string {
   const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: TZ, year: "numeric", month: "2-digit",
+    timeZone: TZ, year: "numeric", month: "2-digit", day: "2-digit",
   }).formatToParts(new Date());
-  const y = parts.find((p) => p.type === "year")?.value ?? "1970";
-  const m = parts.find((p) => p.type === "month")?.value ?? "01";
-  return `${y}-${m}`;
+  const y = Number(parts.find((p) => p.type === "year")?.value ?? "1970");
+  const m = Number(parts.find((p) => p.type === "month")?.value ?? "1");
+  const d = Number(parts.find((p) => p.type === "day")?.value ?? "1");
+  // Before the fiscal start day we're still in the previous fiscal month
+  if (d < FISCAL_START_DAY) {
+    const pm = m === 1 ? 12 : m - 1;
+    const py = m === 1 ? y - 1 : y;
+    return `${py}-${String(pm).padStart(2, "0")}`;
+  }
+  return `${y}-${String(m).padStart(2, "0")}`;
 }
 
 function fmtAmt(n: number, always_sign = false): string {
@@ -32,8 +40,14 @@ function fmtAmt(n: number, always_sign = false): string {
 }
 
 function monthLabel(ym: string): string {
-  const [y, m] = ym.split("-");
-  return new Date(Number(y), Number(m) - 1, 1).toLocaleString("en-US", { month: "long", year: "numeric" });
+  const [y, m] = ym.split("-").map(Number);
+  const nm = m === 12 ? 1 : m + 1;
+  const ny = m === 12 ? y + 1 : y;
+  const start = new Date(y, m - 1, FISCAL_START_DAY);
+  const end   = new Date(ny, nm - 1, FISCAL_START_DAY - 1);
+  const startStr = start.toLocaleString("en-US", { month: "short", day: "numeric" });
+  const endStr   = end.toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  return `${startStr} – ${endStr}`;
 }
 
 function prevMonthYM(ym: string): string {
