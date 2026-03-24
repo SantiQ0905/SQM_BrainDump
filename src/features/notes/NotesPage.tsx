@@ -124,7 +124,7 @@ export function NotesPage() {
                   style={{ animationDelay: `${i * 20}ms` }}
                 >
                   <div className="min-w-0 flex-1">
-                    <div className="font-mono text-[13px] leading-relaxed text-primary whitespace-pre-wrap">{it.raw}</div>
+                    <div className="font-mono text-[13px] leading-relaxed text-primary whitespace-pre-wrap break-words">{it.raw}</div>
                     <LineMetadata item={it} />
                   </div>
                   <button

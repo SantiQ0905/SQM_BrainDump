@@ -70,7 +70,7 @@ export function AppShell() {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   return (
-    <div className="flex h-screen bg-app text-primary transition-colors duration-200">
+    <div className="flex h-screen overflow-x-hidden bg-app text-primary transition-colors duration-200">
       {/* Backdrop overlay — mobile only */}
       {mobileOpen && (
         <div

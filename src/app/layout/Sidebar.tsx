@@ -52,7 +52,7 @@ export function Sidebar({
       className={clsx(
         "flex h-full shrink-0 flex-col border-r border-[#1e1e23] bg-[#0d0d10]",
         "transition-[width] duration-300 ease-in-out",
-        isExpanded ? "w-60" : "w-[68px]"
+        isExpanded ? "w-60 max-w-[80vw]" : "w-[68px]"
       )}
     >
       {/* ── Header ────────────────────────────────────────── */}

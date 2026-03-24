@@ -158,13 +158,13 @@ export function MoodTrackerPage() {
                   const score = log.parsed?.score ?? 0;
                   const c = MOOD_COLORS[score] ?? { pill: "bg-[var(--surface-raised)] text-secondary border-app" };
                   return (
-                    <div key={log.id} className="flex items-center gap-2">
+                    <div key={log.id} className="flex items-center gap-2 min-w-0">
                       <span className="w-24 shrink-0 text-[11px] text-muted">{log.parsed?.date}</span>
                       <span className={`rounded-md border px-2 py-0.5 text-[11px] font-semibold ${c.pill}`}>
                         {score}/5 {MOOD_LABELS[score]}
                       </span>
                       {log.parsed?.notes && (
-                        <span className="truncate text-[11px] text-muted" title={log.parsed.notes}>
+                        <span className="truncate min-w-0 text-[11px] text-muted" title={log.parsed.notes}>
                           {log.parsed.notes}
                         </span>
                       )}
