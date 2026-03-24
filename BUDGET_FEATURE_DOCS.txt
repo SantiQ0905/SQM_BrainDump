@@ -82,55 +82,90 @@ router level — the same protection that guards all other pages).
 
 PURPOSE
 -------
-This page is used at the start of each month (or whenever you need to set the
-"starting state" of each account). It records:
+This page configures the "starting state" of each account for the current fiscal
+month. It stores per-account anchor balances in `budget_monthly_savings`, which
+the main budget page uses to compute running balances as transactions accumulate.
 
-  - Debit accounts: how much cash you actually have right now
-  - Credit cards: how much you already owe (before new charges this month)
-
-This starting balance is stored in `budget_monthly_savings` and used by the main
-budget page to calculate real account balances as transactions accumulate.
+The page has TWO MODES — it auto-detects which to show based on today's date,
+but you can always switch manually.
 
 PIN PROTECTION
 --------------
-Before you can save anything, you must enter a PIN. The PIN is validated against
-the `BUDGET_SETUP_PIN` environment variable (set in Vercel). Once verified, the
-session is stored in sessionStorage so you do not need to re-enter it on the
-same browser session.
+Access requires a PIN validated against the `BUDGET_SETUP_PIN` environment
+variable. Once verified, the session is stored in sessionStorage so you do not
+need to re-enter it in the same browser tab.
 
-FIELDS
-------
-The setup form has four account fields:
+--------------------------------------------------------------------------------
+MODE A: FRESH START — "on the 16th"
+--------------------------------------------------------------------------------
 
-  Debit Accounts (cash in account):
-    - ScotiabankDebit  — your Scotiabank checking/savings balance
-    - NUDebit          — your Nu debit card balance
+Use this when setting up on or very close to the 16th (fiscal month start).
 
-  Credit Cards (amount already owed, before new charges this month):
-    - AMEX             — outstanding balance on your AMEX card
-    - NUCredit         — outstanding balance on your Nu credit card
+DEBIT ACCOUNTS — one field per account:
+  Enter the balance in the account right before any transactions on the 16th.
+  Example: you had $2,000 in NUDebit before payday hit → enter $2,000.
 
-HOW TO USE IT
--------------
-1. Navigate to /budget/setup
-2. Enter your PIN when prompted
-3. Fill in the current balance for each account:
-     - For debit accounts: type the actual money you have in that account today
-     - For credit cards: type the amount you currently owe (can be 0 if paid off)
-4. Click "Save Configuration"
-5. A success message confirms the data was saved to the database
-6. Return to /budget to start logging transactions for the month
+CREDIT CARDS — one field per account:
+  Enter the amount owed from the previous billing cycle.
+  If you paid the balance in full, enter 0.
 
-WHEN TO RUN SETUP
------------------
-- At the beginning of each new month
-- Any time you want to "reset" the starting point for the current month
-- If you forgot to set it up, you can do it retroactively; the system defaults
-  to 0 for any account that has no saved starting balance
+How the math works after setup:
+  Dashboard balance = starting balance + sum of all logged transactions
+  Example: Starting $2,000 + Salary +$16,000 − Groceries -$300 = $17,700
 
-API CALL
---------
-POST /api/budget  { action: "set-initial", pin, month, balances: { [account]: number } }
+--------------------------------------------------------------------------------
+MODE B: MID-MONTH CATCH-UP — "setting up after the 16th"
+--------------------------------------------------------------------------------
+
+Use this when you're setting up days or weeks into the fiscal cycle and already
+have untracked activity (expenses, income) since the 16th.
+
+DEBIT ACCOUNTS — TWO fields per account:
+
+  Left field  — "Balance on the 16th" (optional)
+    What you had in the account on the 16th, before that day's transactions.
+    Can be left blank if you don't know.
+
+  Right field — "Right now" (optional)
+    What your banking app shows at this moment.
+
+  Behavior based on what you fill in:
+
+  Both filled → The app saves the 16th balance as the anchor, then
+                automatically creates a single "adjustment" transaction to
+                bridge the gap to today's real balance. Going forward, new
+                transactions log on top of the established history.
+                Example: 16th=$20,000, today=$17,400 → adjustment of -$2,600
+                (covers all untracked spending between the 16th and today)
+
+  Only "right now" filled → Treats today as day zero. No history before this
+                point. Simpler but loses the 16th–today period entirely.
+
+  Only "16th balance" filled → Saves it as anchor. Use Reconcile Balance on
+                /budget later to fix the current gap manually.
+
+CREDIT CARDS — ONE field per account (mid-month mode):
+  Enter the current amount owed right now (including all charges since the 16th).
+  This becomes the new baseline. Future charges after today are tracked on top.
+  The 16th–today charges are absorbed into this starting balance — they won't
+  appear as individual transactions, but the total is accurate.
+
+RESULT CONFIRMATION
+-------------------
+After saving, the page shows:
+  - Which accounts had balances saved
+  - Which accounts had adjustment transactions created (with the delta amount)
+  - A link back to /budget
+
+The button label changes:
+  Fresh Start    → "Save Configuration"
+  Mid-Month      → "Save & Reconcile"
+
+API CALLS MADE BY THIS PAGE
+----------------------------
+  POST /api/budget { action: "set-initial", pin, month, balances: { [account]: number } }
+  POST /api/budget { action: "reconcile", account, actualBalance, month }
+    (one reconcile call per debit account where both fields were filled)
 
 
 ================================================================================
@@ -579,50 +614,82 @@ STEP 9 — At month end
 11. MID-MONTH RECOVERY WORKFLOW
 ================================================================================
 
-Use this workflow when you start tracking partway through the month and don't
-have a full transaction history from day 1 (e.g., you started on the 16th
-after payday and don't remember earlier activity).
+Use this when you're setting up after the 16th and already have untracked
+expenses and balance changes on all your accounts.
 
-GOAL: Get an accurate picture from a known anchor point onward, without
-fabricating or hunting for transactions you can't recall.
+THE SHORT VERSION
+-----------------
+Open /budget/setup, switch to "Mid-Month Catch-Up" mode, fill in the two-field
+form for debit accounts and the single field for credit cards, click
+"Save & Reconcile." Done — the app handles the rest automatically.
 
-STEP 1 — Set starting balances to your anchor date state
-  Open /budget/setup (or use the inline Starting Balances form on /budget).
-  Enter the balances as they were on your chosen anchor date — for example,
-  the day payday hit, or the first date you have clear records from.
+THE DETAILED VERSION
+--------------------
 
-  - Debit accounts: cash in account on the anchor date
-  - Credit cards: amount owed on the anchor date
+WHAT YOU NEED BEFORE OPENING THE APP
+  Check your banking apps and note down:
+  - ScotiabankDebit: balance on the 16th (optional) + current balance
+  - NUDebit: balance on the 16th (optional) + current balance
+  - AMEX: current amount owed right now
+  - NUCredit: current amount owed right now
 
-STEP 2 — Backfill known transactions since the anchor date
-  Use the Add Transaction form (date field is editable) to log any income or
-  expenses you do remember from between the anchor date and today.
-  Use the web form — do NOT use Telegram for backdated entries, as the bot
-  always uses today's date.
+  For debit accounts, the "16th balance" is ideally what the account showed
+  before payday hit on the 16th. If you don't know it, just leave it blank.
 
-STEP 3 — Reconcile each account
-  After backfilling, open the Reconcile Balance card on /budget.
-  For each account:
-    1. Check your banking app for the current real balance
-    2. Enter it in the Reconcile form
-    3. The app previews the adjustment amount
-    4. Click Reconcile — an "adjustment" transaction absorbs the remaining gap
+STEP 1 — Open /budget/setup
+  The page auto-detects you're mid-month and defaults to "Mid-Month Catch-Up."
+  Enter your PIN.
 
-  This step accounts for anything between the anchor date and today that you
-  couldn't itemize individually.
+STEP 2 — Fill in debit account fields
+  For each debit account:
+    Left field  (16th balance): enter what the account showed on the 16th,
+                                OR leave blank if you don't know/don't care.
+    Right field (right now):    enter what the banking app shows at this moment.
 
-STEP 4 — Verify
-  After reconciling all accounts, the Account Balances card should match your
-  real bank app balances. Summary cards now reflect an accurate current state.
+  The page shows a live preview of the adjustment amount for each account:
+    Example — ScotiabankDebit: 16th=$20,000, now=$17,400 → adjustment -$2,600
 
-STEP 5 — Continue normally
-  From today forward, log every transaction as usual via Telegram (BM:) or the
-  web form. The adjustment entry anchors your history; new entries extend it.
+  If you only fill the "right now" field: that balance becomes day zero.
+  The 16th–today gap is simply not represented. Tracking starts from today.
 
-NOTE: The adjustment transaction is labelled "adjustment / Balance
-reconciliation" in the category breakdown. If you later find and log the real
-missing transactions, delete the adjustment entry and add the real ones instead
-so your category breakdowns remain meaningful.
+STEP 3 — Fill in credit card fields
+  For each credit card, enter the current amount owed (one field).
+  This becomes the baseline. Future charges track on top from today.
+  The charges between the 16th and today are absorbed into this number —
+  they won't appear as line items, but the running total stays accurate.
+
+STEP 4 — Click "Save & Reconcile"
+  The page:
+    1. Saves the 16th balance as the starting balance for each debit account
+    2. Saves the current owed as the starting balance for each credit card
+    3. For any debit account where you filled both fields, calls reconcile
+       and inserts an adjustment transaction covering the gap
+  The confirmation screen shows exactly which accounts were set and what
+  adjustment amounts were created.
+
+STEP 5 — Verify on /budget
+  Click "Go to Budget →" in the confirmation.
+  Account Balances should now match what your banking apps show.
+  Adjustment transactions appear in the transaction list labeled
+  "adjustment / Balance reconciliation."
+
+STEP 6 — Continue normally
+  Log new transactions via Telegram (BM:) or the web form.
+  The system is now accurate from this moment forward.
+
+OPTIONAL — Backfill specific transactions you remember
+  If you recall a particular large expense (e.g., rent, a grocery trip), you
+  can log it with the correct past date using the Add Transaction form on /budget.
+  Then use Reconcile Balance on /budget to re-sync the running total back to
+  reality. Or delete the old adjustment entry and let the real transactions
+  replace its effect.
+
+  Use the web form for past dates — the Telegram BM: parser always uses today.
+
+NOTE: Adjustment transactions appear in the category breakdown under
+"adjustment." They won't pollute your @food or @transport categories. If you
+later itemize the missing transactions properly, delete the adjustment entry
+first so the numbers don't double-count.
 
 ================================================================================
 END OF DOCUMENT
