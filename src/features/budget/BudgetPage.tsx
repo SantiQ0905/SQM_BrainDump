@@ -489,12 +489,12 @@ export function BudgetPage() {
                       <div className="h-2 w-full overflow-hidden rounded-full bg-[var(--surface-raised)]">
                         <div className={`h-full rounded-full transition-all ${barColor}`} style={{ width: `${Math.min(pct, 100)}%` }} />
                       </div>
-                      <div className="mt-1.5 flex items-center justify-between text-[10px] text-muted">
-                        <span>
+                      <div className="mt-1.5 space-y-0.5 text-[10px] text-muted">
+                        <div>
                           {cc.initialOwed > 0 && <>{fmtAmt(cc.initialOwed)} prev · </>}
-                          {fmtAmt(cc.spent)} this month · {fmtAmt(cc.available)} left of {fmtAmt(cc.limit)}
-                        </span>
-                        <span>Cut {cutLabel} ({cc.daysUntilCut}d)</span>
+                          {fmtAmt(cc.spent)} spent · {fmtAmt(cc.available)} left of {fmtAmt(cc.limit)}
+                        </div>
+                        <div>Cut {cutLabel} · {cc.daysUntilCut}d away</div>
                       </div>
                     </li>
                   );
@@ -548,17 +548,17 @@ export function BudgetPage() {
                 onChange={(e) => setTxDesc(e.target.value)}
               />
               {/* Account + Date row */}
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 <select
                   value={txAcct}
                   onChange={(e) => setTxAcct(e.target.value as any)}
-                  className="flex-1 rounded-lg border border-app bg-[var(--surface-raised)] px-2 py-2 text-[12px] text-primary outline-none focus:border-[var(--accent)]/50"
+                  className="flex-1 min-w-[120px] rounded-lg border border-app bg-[var(--surface-raised)] px-2 py-2 text-[12px] text-primary outline-none focus:border-[var(--accent)]/50"
                 >
                   {ACCOUNTS.map((a) => <option key={a} value={a}>{a}</option>)}
                 </select>
                 <input
                   type="date"
-                  className="rounded-lg border border-app bg-[var(--surface-raised)] px-2 py-2 text-[12px] text-primary outline-none focus:border-[var(--accent)]/50"
+                  className="flex-1 min-w-[130px] rounded-lg border border-app bg-[var(--surface-raised)] px-2 py-2 text-[12px] text-primary outline-none focus:border-[var(--accent)]/50"
                   value={txDate}
                   onChange={(e) => setTxDate(e.target.value)}
                 />

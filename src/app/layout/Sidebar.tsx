@@ -52,7 +52,8 @@ export function Sidebar({
       className={clsx(
         "flex h-full shrink-0 flex-col border-r border-[#1e1e23] bg-[#0d0d10]",
         "transition-[width] duration-300 ease-in-out",
-        isExpanded ? "w-60 max-w-[80vw]" : "w-[68px]"
+        isExpanded ? "w-60 max-w-[80vw]" : "w-[68px]",
+        forceExpanded && "overflow-y-auto"
       )}
     >
       {/* ── Header ────────────────────────────────────────── */}
@@ -107,7 +108,10 @@ export function Sidebar({
       </div>
 
       {/* ── Nav ───────────────────────────────────────────── */}
-      <nav className={clsx("flex-1 overflow-y-auto space-y-0.5 py-2", !isExpanded ? "px-2" : "px-3")}>
+      <nav className={clsx(
+        "flex-1 space-y-0.5 py-2",
+        !isExpanded ? "px-2" : "px-3 overflow-y-auto overflow-x-hidden"
+      )}>
         {NAV_ITEMS.map(({ to, label, icon }) => (
           <NavLink
             key={to}
